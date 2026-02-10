@@ -3,102 +3,95 @@ from docxtpl import DocxTemplate
 from datetime import datetime
 import io
 
-# Configuración visual de la página
-st.set_page_config(page_title="Atlas Copco Reports", layout="wide")
-
-# --- DICCIONARIO DE ACTIVIDADES (ESTRUCTURA PARA EL WORD) ---
-datos_manto = {
-    "INSPECCIÓN": "Se realizó inspección visual técnica, verificación de posibles fugas de aire y aceite, chequeo de niveles de lubricante, limpieza de sistema de condensado y monitoreo de parámetros en panel Elektronikon.",
-    "P1": "MANTENCIÓN P1: Se ejecutó cambio de filtros de aire (PowerCell), cambio de filtros de aceite, toma de muestra de lubricante para análisis de laboratorio y limpieza general de la unidad.",
-    "P2": "MANTENCIÓN P2: Incluye actividades P1 + Limpieza técnica profunda de radiadores/enfriadores, engrase de rodamientos de motor principal y revisión de kit de válvulas termostáticas.",
-    "P3": "MANTENCIÓN P3 (OVERHAUL): Incluye actividades P2 + Intervención mayor con cambio de kit de descarga, kit de válvula de presión mínima, cambio de separador aire/aceite y revisión de elemento compresor."
-}
+# Configuración de la página
+st.set_page_config(page_title="Atlas Copco App", layout="wide")
 
 st.title("🚀 Generador de Informes Atlas Copco")
-st.markdown("Llene los datos a continuación para generar el informe en Word.")
 
-# --- FORMULARIO DE DATOS ---
+# --- BASE DE DATOS DE EQUIPOS (Basada en tu tabla) ---
+modelos_equipos = ["GA 132", "GA 45", "ZT 37", "GA 30", "GA 250", "GA 37", "GA 75", "GA 90", "GA 18"]
+areas_trabajo = ["Descarga acido", "PLANTA SX", "PLANTA BORRA", "ÁREA HÚMEDA", "SECA", "TRUCK SHOP", "TALLER"]
+
 with st.form("editor_informe"):
-    st.subheader("1. Identificación y Equipo")
+    st.subheader("1. Identificación del Equipo")
     col1, col2 = st.columns(2)
+    
     with col1:
         fecha_sel = st.date_input("Fecha del Servicio", datetime.now())
-        cliente_nom = st.text_input("Nombre del Cliente", "MINERA SPENCE S.A")
-        contacto = st.text_input("Contacto / Dueño de Área", "Pamela Tápia")
-        tipo_servicio = st.selectbox("Tipo de Servicio", ["INSPECCIÓN", "P1", "P2", "P3"])
+        cliente_nom = st.text_input("Cliente", "MINERA SPENCE S.A")
+        # Nuevo: Selección de Modelo
+        modelo_sel = st.selectbox("Modelo del Equipo", modelos_equipos)
+        # Nuevo: Selección de Área
+        area_sel = st.selectbox("Área de Trabajo", areas_trabajo)
     
     with col2:
         tag_equipo = st.text_input("TAG del Equipo", "35-GC-005")
         serie = st.text_input("Número de Serie", "AIF095301")
-        h_marcha = st.number_input("Horas Totales de Marcha", value=65287)
+        tipo_servicio = st.selectbox("Tipo de Servicio", ["INSPECCIÓN", "P1", "P2", "P3"])
+
+    st.subheader("2. Contadores y Personal")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        h_marcha = st.number_input("Horas Totales Marcha", value=65287)
+    with c2:
         h_carga = st.number_input("Horas Carga", value=30550)
+    with c3:
+        tec1 = st.text_input("Técnico Responsable", "Ignacio Morales")
 
-    st.subheader("2. Personal Técnico")
-    t1, t2 = st.columns(2)
-    with t1:
-        tec1 = st.text_input("Técnico 1", "Ignacio Morales")
-        act1 = st.text_input("Actividad Técnico 1", "M.OB.ST")
-    with t2:
-        tec2 = st.text_input("Técnico 2", "Emian Sanchez")
-        act2 = st.text_input("Actividad Técnico 2", "M.OB.ST")
+    st.subheader("3. Edición de Textos del Informe")
+    # Aquí puedes escribir lo que quieras para que aparezca en el Word
+    alcance_manual = st.text_area("Alcance de la Intervención", 
+        f"Se realizó inspección a equipo compresor {modelo_sel} con identificación TAG {tag_equipo} de {area_sel}.")
+    
+    actividades_manual = st.text_area("Actividades Ejecutadas", 
+        "Escriba aquí las tareas realizadas...")
 
-    st.subheader("3. Observaciones")
-    obs_final = st.text_area("Estado final del equipo", "El equipo queda operativo y funcionando bajo parámetros normales de trabajo.")
+    preparar = st.form_submit_button("1. GENERAR INFORME")
 
-    # Botón para procesar
-    preparar = st.form_submit_button("1. GENERAR ESTRUCTURA")
-
-# --- LÓGICA DE PROCESAMIENTO ---
 if preparar:
     try:
-        # Cargar la plantilla (Asegúrate de que el nombre sea exacto en GitHub)
         doc = DocxTemplate("InformeInspección.docx")
         
-        # --- Lógica de Fecha en Español ---
+        # Fecha en español
         meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
         fecha_texto = f"{fecha_sel.day} de {meses[fecha_sel.month - 1]} de {fecha_sel.year}"
 
-        # --- Lógica de Overhaul ---
+        # Nota de overhaul automática
         aviso_overhaul = ""
         if h_marcha > 40000:
-            aviso_overhaul = "NOTA TÉCNICA: El equipo ha superado las 40.000 horas de operación. Se recomienda coordinar Overhaul para asegurar la disponibilidad del activo."
+            aviso_overhaul = "NOTA TÉCNICA: Equipo sobre 40.000 hrs. Se recomienda Overhaul."
 
-        # --- MAPEO DE DATOS PARA EL WORD ---
+        # Mapeo para el Word
         contexto = {
             "fecha": fecha_texto,
             "cliente": cliente_nom,
-            "cliente_contacto": contacto,
-            "tipo_orden": tipo_servicio,
+            "equipo_modelo": modelo_sel, # Nueva etiqueta
+            "area": area_sel,           # Nueva etiqueta
             "tag": tag_equipo,
             "serie": serie,
+            "tipo_orden": tipo_servicio,
             "tecnico_1": tec1,
-            "act_1": act1,
-            "tecnico_2": tec2,
-            "act_2": act2,
             "horas_totales_despues": f"{h_marcha} Hrs.",
             "horas_carga_despues": f"{h_carga} Hrs.",
-            "actividades_ejecutadas": datos_manto[tipo_servicio],
-            "estado_entrega": obs_final,
+            "alcanze_intervencion": alcance_manual, # Etiqueta para el párrafo de alcance
+            "actividades_ejecutadas": actividades_manual, # Etiqueta para las tareas
             "nota_overhaul": aviso_overhaul
         }
         
-        # Inyectar datos en el Word
         doc.render(contexto)
         
-        # Guardar en memoria para descarga
         output = io.BytesIO()
         doc.save(output)
         output.seek(0)
         
-        st.success("✅ ¡Informe procesado con éxito!")
+        st.success("✅ ¡Informe procesado!")
         
-        # --- BOTÓN DE DESCARGA FINAL ---
         st.download_button(
-            label="📥 CLIC AQUÍ PARA DESCARGAR EL WORD",
+            label="📥 DESCARGAR WORD",
             data=output,
-            file_name=f"Informe_{tag_equipo}_{tipo_servicio}.docx",
+            file_name=f"Informe_{tag_equipo}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
 
     except Exception as e:
-        st.error(f"Error crítico: {e}. Asegúrese de que el archivo 'InformeInspección.docx' esté en GitHub.")
+        st.error(f"Error: {e}")

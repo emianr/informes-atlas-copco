@@ -65,10 +65,10 @@ with tab1:
         t_col1, t_col2 = st.columns(2)
         with t_col1:
             act1 = st.text_input("Actividad Técnico 1", "M.OB.ST")
-            h1 = st.text_input("Hora/Km T1", "8")
+            h1 = st.text_input("Hora/Km T1", "1")
         with t_col2:
             tec2_input = st.text_input("Técnico 2", "Emian Sanchez")
-            h2 = st.text_input("Hora/Km T2", "8")
+            h2 = st.text_input("Hora/Km T2", "1")
 
         alcance_final = f"Se realizó inspección a equipo compresor {modelo_aut} con identificación TAG {tag_sel} de {clase_aut} {area_aut}, conforme a procedimientos internos y buenas prácticas de mantenimiento."
         alcance_manual = st.text_area("Alcance de la Intervención", value=alcance_final, height=100)
@@ -128,3 +128,4 @@ with tab2:
             df_historial = df_historial.drop(df_historial.index[fila_a_borrar])
             df_historial.to_csv(DB_FILE, index=False)
             st.rerun()
+

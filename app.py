@@ -11,6 +11,8 @@ st.set_page_config(page_title="Atlas Copco Tracker", layout="wide")
 DB_FILE = "historial_horas.csv"
 if os.path.exists(DB_FILE):
     df_historial = pd.read_csv(DB_FILE)
+    # Asegurar que la fecha sea objeto datetime para que no falle al editar
+    df_historial['Fecha'] = pd.to_datetime(df_historial['Fecha']).dt.date
 else:
     df_historial = pd.DataFrame(columns=["Fecha", "TAG", "Horas_Marcha", "Horas_Carga", "Tecnico", "Contacto"])
 
@@ -35,9 +37,9 @@ equipos_db = {
     "TALLER-01": ["GA18", "API335343", "TALLER", "ÁREA SECA"]
 }
 
-st.title("🚀 Gestión de Compresores")
+st.title("🚀 Gestión de Compresores Atlas Copco")
 
-tab1, tab2 = st.tabs(["Generar Informe", "Historial"])
+tab1, tab2 = st.tabs(["Generar Informe", "🛠️ Administrar Historial"])
 
 with tab1:
     with st.form("editor_informe"):
@@ -62,25 +64,14 @@ with tab1:
         with p1: p_carga = st.text_input("Carga (bar)", "6.4")
         with p2: p_descarga = st.text_input("Descarga (bar)", "6.8")
         with p3: temp_sal = st.text_input("Temp (°C)", "80")
-            
-        t1, t2 = st.columns(2)
-        with t1:
-            tec2_input = st.text_input("Técnico 2", "Emian Sanchez")
-            act1 = st.text_input("Actividad", "M.OB.ST")
-        with t2:
-            h1 = st.text_input("Hrs T1", "8")
-            h2 = st.text_input("Hrs T2", "8")
 
-        # --- TEXTO DE ALCANCE ACTUALIZADO SEGÚN TU SOLICITUD ---
-        # Se eliminan espacios en blanco extras y se usa la nueva estructura
         alcance_val = f"Se realizó inspección a equipo compresor {modelo_aut} con identificación TAG {tag_sel} de {clase_aut}, {area_aut}, conforme a procedimientos internos y buenas prácticas de mantenimiento."
-        
-        alcance_manual = st.text_area("Alcance de la Intervención", value=alcance_val, height=80)
+        alcance_manual = st.text_area("Alcance", value=alcance_val, height=80)
         
         concl_val = f"El equipo se encuentra funcionando en óptimas condiciones, bajo parámetros normales de funcionamiento (Presión carga: {p_carga} bar / descarga: {p_descarga} bar, Temp: {temp_sal} °C), con nivel de aceite dentro del rango establecido, sin fugas en circuitos de aire/aceite y con filtros sin saturación."
-        conclusiones_manual = st.text_area("Condición Final", value=concl_val, height=100)
+        conclusiones_manual = st.text_area("Condición Final", value=concl_val, height=80)
 
-        enviar = st.form_submit_button("GENERAR INFORME WORD")
+        enviar = st.form_submit_button("💾 GUARDAR Y GENERAR WORD")
 
     if enviar:
         nuevo = pd.DataFrame([[fecha_sel, tag_sel, h_marcha_val, h_carga_val, tec1_input, cliente_cont]], 
@@ -94,34 +85,64 @@ with tab1:
             fecha_txt = f"{fecha_sel.day} de {meses[fecha_sel.month - 1]} de {fecha_sel.year}"
             
             contexto = {
-                "fecha": fecha_txt,
-                "cliente": "MINERA SPENCE S.A",
-                "cliente_contact": cliente_cont,
-                "tag": tag_sel,
-                "equipo_modelo": modelo_aut,
-                "serie": serie_aut,
-                "area": area_aut,
-                "clase_area": clase_aut,
-                "tipo_orden": tipo_servicio,
-                "tecnico_1": tec1_input, "act_1": act1, "h_1": h1,
-                "tecnico_2": tec2_input, "h_2": h2,
-                "horas_marcha": f"{h_marcha_val} Hrs.",
-                "horas_totales_despues": f"{h_marcha_val} Hrs.",
-                "horas_carga_despues": f"{h_carga_val} Hrs.",
-                "alcanze_intervencion": alcance_manual.strip(),
-                "estado_entrega": conclusiones_manual.strip()
+                "fecha": fecha_txt, "cliente": "MINERA SPENCE S.A", "cliente_contact": cliente_cont,
+                "tag": tag_sel, "equipo_modelo": modelo_aut, "serie": serie_aut, "area": area_aut, "clase_area": clase_aut,
+                "tipo_orden": tipo_servicio, "tecnico_1": tec1_input, "tecnico_2": "Emian Sanchez", "act_1": "M.OB.ST",
+                "h_1": "8", "h_2": "8", "horas_marcha": f"{h_marcha_val} Hrs.",
+                "horas_totales_despues": f"{h_marcha_val} Hrs.", "horas_carga_despues": f"{h_carga_val} Hrs.",
+                "alcanze_intervencion": alcance_manual.strip(), "estado_entrega": conclusiones_manual.strip()
             }
-            
             doc.render(contexto)
             bio = io.BytesIO()
             doc.save(bio)
             bio.seek(0)
-            st.success(f"✅ Informe de {tag_sel} generado correctamente.")
+            st.success(f"✅ Registro guardado. Informe de {tag_sel} listo.")
             st.download_button("📥 DESCARGAR REPORTE", bio, f"Reporte_{tag_sel}.docx")
         except Exception as e:
-            st.error(f"Error técnico: {e}")
+            st.error(f"Error: {e}")
 
+# --- PESTAÑA DE HISTORIAL MEJORADA ---
 with tab2:
-    st.subheader("Historial de Inspecciones")
-    st.dataframe(df_historial)
+    st.subheader("📋 Registros de Mantenimiento")
+    
+    if not df_historial.empty:
+        # Mostrar tabla con índice visible
+        st.dataframe(df_historial, use_container_width=True)
 
+        col_edit, col_del = st.columns(2)
+
+        with col_edit:
+            st.info("✏️ **Editar Registro**")
+            idx_edit = st.number_input("ID de fila para editar", min_value=0, max_value=len(df_historial)-1, step=1)
+            
+            with st.expander("Abrir formulario de edición"):
+                fila = df_historial.iloc[idx_edit]
+                edit_fecha = st.date_input("Nueva Fecha", fila['Fecha'])
+                edit_tag = st.selectbox("Nuevo TAG", list(equipos_db.keys()), index=list(equipos_db.keys()).index(fila['TAG']))
+                edit_horas = st.number_input("Nuevas Horas Marcha", value=int(fila['Horas_Marcha']))
+                edit_tec = st.text_input("Nuevo Técnico", value=fila['Tecnico'])
+                
+                if st.button("Actualizar Registro"):
+                    df_historial.at[idx_edit, 'Fecha'] = edit_fecha
+                    df_historial.at[idx_edit, 'TAG'] = edit_tag
+                    df_historial.at[idx_edit, 'Horas_Marcha'] = edit_horas
+                    df_historial.at[idx_edit, 'Tecnico'] = edit_tec
+                    df_historial.to_csv(DB_FILE, index=False)
+                    st.success("¡Registro actualizado!")
+                    st.rerun()
+
+        with col_del:
+            st.warning("🗑️ **Borrar Registro**")
+            idx_del = st.number_input("ID de fila para borrar", min_value=0, max_value=len(df_historial)-1, step=1, key="del")
+            if st.button("Eliminar permanentemente"):
+                df_historial = df_historial.drop(df_historial.index[idx_del])
+                df_historial.to_csv(DB_FILE, index=False)
+                st.error(f"Registro {idx_del} eliminado.")
+                st.rerun()
+        
+        st.divider()
+        # Botón para descargar todo el historial a CSV por seguridad
+        csv = df_historial.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Exportar todo el historial (CSV)", csv, "historial_respaldo.csv", "text/csv")
+    else:
+        st.write("No hay registros en el historial todavía.")

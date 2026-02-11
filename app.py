@@ -9,12 +9,17 @@ st.set_page_config(page_title="Atlas Copco Tracker", layout="wide")
 
 # --- BASE DE DATOS LOCAL ---
 DB_FILE = "historial_horas.csv"
-if os.path.exists(DB_FILE):
-    df_historial = pd.read_csv(DB_FILE)
-    # Asegurar que la fecha sea objeto datetime para que no falle al editar
-    df_historial['Fecha'] = pd.to_datetime(df_historial['Fecha']).dt.date
-else:
-    df_historial = pd.DataFrame(columns=["Fecha", "TAG", "Horas_Marcha", "Horas_Carga", "Tecnico", "Contacto"])
+
+# Función para cargar datos
+def cargar_datos():
+    if os.path.exists(DB_FILE):
+        df = pd.read_csv(DB_FILE)
+        df['Fecha'] = pd.to_datetime(df['Fecha']).dt.date
+        return df
+    else:
+        return pd.DataFrame(columns=["Fecha", "TAG", "Horas_Marcha", "Horas_Carga", "Tecnico", "Contacto"])
+
+df_historial = cargar_datos()
 
 # --- BASE DE DATOS DE EQUIPOS ---
 equipos_db = {
@@ -37,9 +42,9 @@ equipos_db = {
     "TALLER-01": ["GA18", "API335343", "TALLER", "ÁREA SECA"]
 }
 
-st.title("🚀 Gestión de Compresores Atlas Copco")
+st.title("🚀 Atlas Copco Tracker")
 
-tab1, tab2 = st.tabs(["Generar Informe", "🛠️ Administrar Historial"])
+tab1, tab2 = st.tabs(["Generar Informe", "📊 Historial Editable"])
 
 with tab1:
     with st.form("editor_informe"):
@@ -52,14 +57,13 @@ with tab1:
         c1, c2 = st.columns(2)
         with c1:
             fecha_sel = st.date_input("Fecha", datetime.now())
-            cliente_cont = st.text_input("Contacto / Dueño de Área", "Pamela Tapia")
+            cliente_cont = st.text_input("Contacto", "Pamela Tapia")
             tipo_servicio = st.selectbox("Tipo de Mantención", ["INSPECCIÓN", "P1", "P2", "P3"])
         with c2:
             h_marcha_val = st.number_input("Horas Totales Marcha", value=h_sugerida)
             h_carga_val = st.number_input("Horas Carga", value=0)
-            tec1_input = st.text_input("Técnico Responsable", "Ignacio Morales")
+            tec1_input = st.text_input("Técnico", "Ignacio Morales")
 
-        st.subheader("📊 Parámetros Operacionales")
         p1, p2, p3 = st.columns(3)
         with p1: p_carga = st.text_input("Carga (bar)", "6.4")
         with p2: p_descarga = st.text_input("Descarga (bar)", "6.8")
@@ -68,10 +72,10 @@ with tab1:
         alcance_val = f"Se realizó inspección a equipo compresor {modelo_aut} con identificación TAG {tag_sel} de {clase_aut}, {area_aut}, conforme a procedimientos internos y buenas prácticas de mantenimiento."
         alcance_manual = st.text_area("Alcance", value=alcance_val, height=80)
         
-        concl_val = f"El equipo se encuentra funcionando en óptimas condiciones, bajo parámetros normales de funcionamiento (Presión carga: {p_carga} bar / descarga: {p_descarga} bar, Temp: {temp_sal} °C), con nivel de aceite dentro del rango establecido, sin fugas en circuitos de aire/aceite y con filtros sin saturación."
+        concl_val = f"El equipo se encuentra funcionando en óptimas condiciones, bajo parámetros normales de funcionamiento (Carga: {p_carga} bar / Descarga: {p_descarga} bar, Temp: {temp_sal} °C), con nivel de aceite en rango."
         conclusiones_manual = st.text_area("Condición Final", value=concl_val, height=80)
 
-        enviar = st.form_submit_button("💾 GUARDAR Y GENERAR WORD")
+        enviar = st.form_submit_button("💾 GUARDAR E IMPRIMIR")
 
     if enviar:
         nuevo = pd.DataFrame([[fecha_sel, tag_sel, h_marcha_val, h_carga_val, tec1_input, cliente_cont]], 
@@ -83,66 +87,37 @@ with tab1:
             doc = DocxTemplate("InformeInspección.docx")
             meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
             fecha_txt = f"{fecha_sel.day} de {meses[fecha_sel.month - 1]} de {fecha_sel.year}"
-            
             contexto = {
-                "fecha": fecha_txt, "cliente": "MINERA SPENCE S.A", "cliente_contact": cliente_cont,
-                "tag": tag_sel, "equipo_modelo": modelo_aut, "serie": serie_aut, "area": area_aut, "clase_area": clase_aut,
-                "tipo_orden": tipo_servicio, "tecnico_1": tec1_input, "tecnico_2": "Emian Sanchez", "act_1": "M.OB.ST",
-                "h_1": "8", "h_2": "8", "horas_marcha": f"{h_marcha_val} Hrs.",
-                "horas_totales_despues": f"{h_marcha_val} Hrs.", "horas_carga_despues": f"{h_carga_val} Hrs.",
-                "alcanze_intervencion": alcance_manual.strip(), "estado_entrega": conclusiones_manual.strip()
+                "fecha": fecha_txt, "cliente_contact": cliente_cont, "tag": tag_sel, "equipo_modelo": modelo_aut,
+                "serie": serie_aut, "area": area_aut, "clase_area": clase_aut, "tipo_orden": tipo_servicio,
+                "tecnico_1": tec1_input, "tecnico_2": "Emian Sanchez", "act_1": "M.OB.ST", "h_1": "8", "h_2": "8",
+                "horas_marcha": f"{h_marcha_val} Hrs.", "horas_totales_despues": f"{h_marcha_val} Hrs.",
+                "horas_carga_despues": f"{h_carga_val} Hrs.", "alcanze_intervencion": alcance_manual.strip(),
+                "estado_entrega": conclusiones_manual.strip()
             }
             doc.render(contexto)
             bio = io.BytesIO()
             doc.save(bio)
             bio.seek(0)
-            st.success(f"✅ Registro guardado. Informe de {tag_sel} listo.")
-            st.download_button("📥 DESCARGAR REPORTE", bio, f"Reporte_{tag_sel}.docx")
+            st.success("✅ ¡Guardado!")
+            st.download_button("📥 DESCARGAR", bio, f"Reporte_{tag_sel}.docx")
         except Exception as e:
             st.error(f"Error: {e}")
 
-# --- PESTAÑA DE HISTORIAL MEJORADA ---
+# --- PESTAÑA HISTORIAL CON EDICIÓN DIRECTA (DATA EDITOR) ---
 with tab2:
-    st.subheader("📋 Registros de Mantenimiento")
+    st.subheader("📝 Editor de Historial")
+    st.info("💡 Puedes hacer doble clic en cualquier celda para cambiar el dato, o seleccionar una fila y presionar 'Suprimir' en tu teclado para borrar.")
     
-    if not df_historial.empty:
-        # Mostrar tabla con índice visible
-        st.dataframe(df_historial, use_container_width=True)
-
-        col_edit, col_del = st.columns(2)
-
-        with col_edit:
-            st.info("✏️ **Editar Registro**")
-            idx_edit = st.number_input("ID de fila para editar", min_value=0, max_value=len(df_historial)-1, step=1)
-            
-            with st.expander("Abrir formulario de edición"):
-                fila = df_historial.iloc[idx_edit]
-                edit_fecha = st.date_input("Nueva Fecha", fila['Fecha'])
-                edit_tag = st.selectbox("Nuevo TAG", list(equipos_db.keys()), index=list(equipos_db.keys()).index(fila['TAG']))
-                edit_horas = st.number_input("Nuevas Horas Marcha", value=int(fila['Horas_Marcha']))
-                edit_tec = st.text_input("Nuevo Técnico", value=fila['Tecnico'])
-                
-                if st.button("Actualizar Registro"):
-                    df_historial.at[idx_edit, 'Fecha'] = edit_fecha
-                    df_historial.at[idx_edit, 'TAG'] = edit_tag
-                    df_historial.at[idx_edit, 'Horas_Marcha'] = edit_horas
-                    df_historial.at[idx_edit, 'Tecnico'] = edit_tec
-                    df_historial.to_csv(DB_FILE, index=False)
-                    st.success("¡Registro actualizado!")
-                    st.rerun()
-
-        with col_del:
-            st.warning("🗑️ **Borrar Registro**")
-            idx_del = st.number_input("ID de fila para borrar", min_value=0, max_value=len(df_historial)-1, step=1, key="del")
-            if st.button("Eliminar permanentemente"):
-                df_historial = df_historial.drop(df_historial.index[idx_del])
-                df_historial.to_csv(DB_FILE, index=False)
-                st.error(f"Registro {idx_del} eliminado.")
-                st.rerun()
-        
-        st.divider()
-        # Botón para descargar todo el historial a CSV por seguridad
-        csv = df_historial.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Exportar todo el historial (CSV)", csv, "historial_respaldo.csv", "text/csv")
-    else:
-        st.write("No hay registros en el historial todavía.")
+    # Creamos el editor de datos
+    df_editado = st.data_editor(
+        df_historial, 
+        num_rows="dynamic", # Permite añadir y borrar filas con el botón (+) o seleccionando y borrando
+        use_container_width=True,
+        key="historial_editor"
+    )
+    
+    if st.button("💾 GUARDAR CAMBIOS EN EL HISTORIAL"):
+        df_editado.to_csv(DB_FILE, index=False)
+        st.success("¡Base de datos actualizada correctamente!")
+        st.rerun()

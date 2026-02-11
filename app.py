@@ -8,7 +8,7 @@ import os
 # Configuración de la página
 st.set_page_config(page_title="Atlas Copco Tracker", layout="wide")
 
-# --- ARCHIVO DE BASE DE DATOS ---
+# --- ARCHIVO DE BASE DE DATOS LOCAL ---
 DB_FILE = "historial_horas.csv"
 
 if os.path.exists(DB_FILE):
@@ -16,7 +16,7 @@ if os.path.exists(DB_FILE):
 else:
     df_historial = pd.DataFrame(columns=["Fecha", "TAG", "Horas_Marcha", "Horas_Carga", "Tecnico", "Contacto"])
 
-# --- BASE DE DATOS DE EQUIPOS ---
+# --- BASE DE DATOS DE EQUIPOS (SEGÚN TUS IMÁGENES) ---
 equipos_db = {
     "70-GC-013": ["GA 132", "AIF095296", "Descarga acido", "ÁREA HÚMEDA"],
     "70-GC-014": ["GA 132", "AIF095297", "Descarga acido", "ÁREA HÚMEDA"],
@@ -46,14 +46,14 @@ with tab1:
         tag_sel = st.selectbox("Seleccione el TAG", list(equipos_db.keys()))
         modelo_aut, serie_aut, area_aut, clase_aut = equipos_db[tag_sel]
         
-        # Último registro para sugerir horas
+        # Sugerir horas del último registro
         ultimo_registro = df_historial[df_historial["TAG"] == tag_sel].tail(1)
         h_sugerida = int(ultimo_registro["Horas_Marcha"].values[0]) if not ultimo_registro.empty else 0
         
         col1, col2 = st.columns(2)
         with col1:
             fecha_sel = st.date_input("Fecha", datetime.now())
-            cliente_nom = st.text_input("Cliente", "MINERA SPENCE S.A")
+            cliente_nom = st.text_input("Nombre del Cliente", "MINERA SPENCE S.A")
             cliente_cont = st.text_input("Contacto / Dueño de Área", "Pamela Tapia")
             tipo_servicio = st.selectbox("Tipo de Mantención", ["INSPECCIÓN", "P1", "P2", "P3"])
         with col2:
@@ -71,13 +71,16 @@ with tab1:
             tec2_input = st.text_input("Técnico 2", "Emian Sanchez")
             h2 = st.text_input("Hora/Km T2", "8")
 
-        alcance_manual = st.text_area("Alcance", f"Se realizó inspección a equipo compresor {modelo_aut} con identificación TAG {tag_sel} de {clase_aut} {area_aut}...")
-        conclusiones_manual = st.text_area("Conclusiones", "El equipo se encuentra funcionando en óptimas condiciones...")
+        alcance_final = f"Se realizó inspección a equipo compresor {modelo_aut} con identificación TAG {tag_sel} de {clase_aut} {area_aut}, conforme a procedimientos internos y buenas prácticas de mantenimiento."
+        alcance_manual = st.text_area("Alcance de la Intervención", value=alcance_final, height=100)
+        
+        texto_conclusiones_default = "El equipo se encuentra funcionando en óptimas condiciones, bajo parámetros normales de funcionamiento, con nivel de aceite dentro del rango establecido, sin fugas en circuitos de aire/aceite y con filtros sin saturación."
+        conclusiones_manual = st.text_area("Conclusiones y Estado de Entrega", value=texto_conclusiones_default, height=150)
 
         enviar = st.form_submit_button("GUARDAR DATOS Y GENERAR WORD")
 
     if enviar:
-        # Guardar en historial
+        # Guardar en el historial CSV
         nuevo_dato = pd.DataFrame([[fecha_sel, tag_sel, h_marcha_val, h_carga_val, tec1_input, cliente_cont]], 
                                   columns=["Fecha", "TAG", "Horas_Marcha", "Horas_Carga", "Tecnico", "Contacto"])
         df_historial = pd.concat([df_historial, nuevo_dato], ignore_index=True)
@@ -88,10 +91,11 @@ with tab1:
             meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
             fecha_texto = f"{fecha_sel.day} de {meses[fecha_sel.month - 1]} de {fecha_sel.year}"
             
+            # MAPEO DE ETIQUETAS (Asegúrate que en Word sean iguales)
             contexto = {
                 "fecha": fecha_texto,
                 "cliente": cliente_nom,
-                "cliente_contact": cliente_cont, # <-- NUEVA ETIQUETA
+                "cliente_contacto": cliente_cont,  # Coincide con {{ cliente_contacto }}
                 "tag": tag_sel,
                 "equipo_modelo": modelo_aut,
                 "serie": serie_aut,
@@ -111,17 +115,17 @@ with tab1:
             doc.save(bio)
             bio.seek(0)
             
-            st.success(f"✅ Informe generado. Último registro: {h_marcha_val} hrs.")
-            st.download_button("📥 DESCARGAR INFORME", bio, f"Reporte_{tag_sel}.docx")
+            st.success(f"✅ ¡Informe de {tag_sel} generado y guardado en historial!")
+            st.download_button("📥 DESCARGAR INFORME WORD", bio, f"Reporte_{tag_sel}.docx")
         except Exception as e:
-            st.error(f"Error al generar Word: {e}")
+            st.error(f"Error al generar el documento: {e}")
 
 with tab2:
     st.subheader("Registros Almacenados")
     st.dataframe(df_historial)
     if not df_historial.empty:
-        fila_a_borrar = st.number_input("Fila a eliminar", min_value=0, max_value=len(df_historial)-1, step=1)
-        if st.button("Eliminar Registro"):
+        fila_a_borrar = st.number_input("Número de fila para eliminar/corregir", min_value=0, max_value=len(df_historial)-1, step=1)
+        if st.button("Eliminar Registro Seleccionado"):
             df_historial = df_historial.drop(df_historial.index[fila_a_borrar])
             df_historial.to_csv(DB_FILE, index=False)
             st.rerun()

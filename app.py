@@ -8,7 +8,7 @@ st.set_page_config(page_title="Atlas Copco App", layout="wide")
 
 st.title("🚀 Sistema de Informes Automatizado")
 
-# --- BASE DE DATOS ACTUALIZADA ---
+# --- BASE DE DATOS DE EQUIPOS ---
 equipos_db = {
     "70-GC-013": ["GA 132", "AIF095296", "Descarga acido", "ÁREA HÚMEDA"],
     "70-GC-014": ["GA 132", "AIF095297", "Descarga acido", "ÁREA HÚMEDA"],
@@ -30,8 +30,7 @@ equipos_db = {
 }
 
 with st.form("editor_informe"):
-    st.subheader("Selección de Equipo y Datos")
-    
+    st.subheader("1. Selección de Equipo")
     tag_sel = st.selectbox("Seleccione el TAG del compresor", list(equipos_db.keys()))
     modelo_aut, serie_aut, area_aut, clase_aut = equipos_db[tag_sel]
     
@@ -40,20 +39,26 @@ with st.form("editor_informe"):
         fecha_sel = st.date_input("Fecha", datetime.now())
         cliente_nom = st.text_input("Cliente", "MINERA SPENCE S.A")
         tipo_servicio = st.selectbox("Tipo de Mantención", ["INSPECCIÓN", "P1", "P2", "P3"])
-    
     with col2:
-        st.success(f"📌 **Localización:** {clase_aut} ({area_aut})")
-        tec1 = st.text_input("Técnico", "Ignacio Morales")
-        h_marcha = st.number_input("Horas Marcha", value=0)
-        h_carga = st.number_input("Horas Carga", value=0)
+        st.info(f"📍 Localización: {clase_aut} ({area_aut})")
+        h_marcha_val = st.number_input("Horas Totales Marcha", value=0)
+        h_carga_val = st.number_input("Horas Carga", value=0)
 
-    st.subheader("Textos del Informe")
-    
-    # Alcance automático
+    st.subheader("2. Confirmación de Tiempos (Personal)")
+    t1, t2 = st.columns(2)
+    with t1:
+        tec1 = st.text_input("Técnico 1", "Ignacio Morales")
+        act1 = st.text_input("Actividad 1", "M.OB.ST")
+        h1 = st.text_input("Hora/Km 1", "8")
+    with t2:
+        tec2 = st.text_input("Técnico 2", "Emian Sanchez")
+        act2 = st.text_input("Actividad 2", "M.OB.ST")
+        h2 = st.text_input("Hora/Km 2", "8")
+
+    st.subheader("3. Textos del Informe")
     alcance_final = f"Se realizó inspección a equipo compresor {modelo_aut} con identificación TAG {tag_sel} de {clase_aut} {area_aut}, conforme a procedimientos internos y buenas prácticas de mantenimiento."
     alcance_manual = st.text_area("Alcance de la Intervención", value=alcance_final, height=100)
     
-    # NUEVO TEXTO DE CONCLUSIONES POR DEFECTO
     texto_conclusiones_default = "El equipo se encuentra funcionando en óptimas condiciones, bajo parámetros normales de funcionamiento, con nivel de aceite dentro del rango establecido, sin fugas en circuitos de aire/aceite y con filtros sin saturación."
     conclusiones_manual = st.text_area("Conclusiones y Estado de Entrega", value=texto_conclusiones_default, height=150)
 
@@ -74,9 +79,12 @@ if generar:
             "tag": tag_sel,
             "serie": serie_aut,
             "tipo_orden": tipo_servicio,
-            "tecnico_1": tec1,
-            "horas_totales_despues": f"{h_marcha} Hrs.",
-            "horas_carga_despues": f"{h_carga} Hrs.",
+            # Etiquetas para la tabla de tiempos
+            "tecnico_1": tec1, "act_1": act1, "h_1": h1,
+            "tecnico_2": tec2, "act_2": act2, "h_2": h2,
+            # Lecturas
+            "horas_marcha": f"{h_marcha_val} Hrs.",
+            "horas_carga_despues": f"{h_carga_val} Hrs.",
             "alcanze_intervencion": alcance_manual,
             "estado_entrega": conclusiones_manual
         }

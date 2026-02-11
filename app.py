@@ -8,8 +8,7 @@ st.set_page_config(page_title="Atlas Copco App", layout="wide")
 
 st.title("🚀 Sistema de Informes Automatizado")
 
-# --- BASE DE DATOS ACTUALIZADA CON CLASIFICACIÓN (Seca, Humeda, Mina) ---
-# Formato: "TAG": ["Modelo", "Serie", "Área Específica", "Clasificación"]
+# --- BASE DE DATOS ACTUALIZADA ---
 equipos_db = {
     "70-GC-013": ["GA 132", "AIF095296", "Descarga acido", "ÁREA HÚMEDA"],
     "70-GC-014": ["GA 132", "AIF095297", "Descarga acido", "ÁREA HÚMEDA"],
@@ -33,10 +32,7 @@ equipos_db = {
 with st.form("editor_informe"):
     st.subheader("Selección de Equipo y Datos")
     
-    # Menú para elegir el TAG
     tag_sel = st.selectbox("Seleccione el TAG del compresor", list(equipos_db.keys()))
-    
-    # Obtener datos automáticos
     modelo_aut, serie_aut, area_aut, clase_aut = equipos_db[tag_sel]
     
     col1, col2 = st.columns(2)
@@ -51,20 +47,21 @@ with st.form("editor_informe"):
         h_marcha = st.number_input("Horas Marcha", value=0)
         h_carga = st.number_input("Horas Carga", value=0)
 
-    st.subheader("Textos del Informe (Se editan solos)")
-    # El Alcance ahora incluye la clasificación automática (Húmeda, Seca o Mina)
+    st.subheader("Textos del Informe")
+    
+    # Alcance automático
     alcance_final = f"Se realizó inspección a equipo compresor {modelo_aut} con identificación TAG {tag_sel} de {clase_aut} {area_aut}, conforme a procedimientos internos y buenas prácticas de mantenimiento."
     alcance_manual = st.text_area("Alcance de la Intervención", value=alcance_final, height=100)
     
-    conclusiones_manual = st.text_area("Conclusiones", value="El equipo queda operativo y funcionando bajo parámetros normales.")
+    # NUEVO TEXTO DE CONCLUSIONES POR DEFECTO
+    texto_conclusiones_default = "El equipo se encuentra funcionando en óptimas condiciones, bajo parámetros normales de funcionamiento, con nivel de aceite dentro del rango establecido, sin fugas en circuitos de aire/aceite y con filtros sin saturación."
+    conclusiones_manual = st.text_area("Conclusiones y Estado de Entrega", value=texto_conclusiones_default, height=150)
 
     generar = st.form_submit_button("GENERAR WORD")
 
 if generar:
     try:
         doc = DocxTemplate("InformeInspección.docx")
-        
-        # Fecha en español
         meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
         fecha_texto = f"{fecha_sel.day} de {meses[fecha_sel.month - 1]} de {fecha_sel.year}"
 
@@ -73,7 +70,7 @@ if generar:
             "cliente": cliente_nom,
             "equipo_modelo": modelo_aut,
             "area": area_aut,
-            "clase_area": clase_aut, # Nueva etiqueta para Humeda/Seca/Mina
+            "clase_area": clase_aut,
             "tag": tag_sel,
             "serie": serie_aut,
             "tipo_orden": tipo_servicio,

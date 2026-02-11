@@ -79,11 +79,14 @@ with tab1:
             tec2_input = st.text_input("Técnico 2", "Emian Sanchez")
             h2 = st.text_input("Hora/Km T2", "8")
 
-        # Texto automático del Alcance [cite: 7, 8]
-        alcance_final = f"Se realizó inspección a equipo compresor {modelo_aut} con identificación TAG {tag_sel} de {clase_aut} {area_aut}, conforme a procedimientos internos y buenas prácticas de mantenimiento."
-        alcance_manual = st.text_area("Alcance de la Intervención", value=alcance_final, height=100)
+        # --- LÓGICA AUTOMÁTICA DE ALCANCE SEGÚN TIPO DE SERVICIO ---
+        if tipo_servicio == "INSPECCIÓN":
+            alcance_val = f"Se realizó inspección técnica al equipo compresor {modelo_aut} (TAG {tag_sel}) en {area_aut}, verificando parámetros de operación, niveles de lubricante y estado general de filtros conforme a pauta técnica."
+        else:
+            alcance_val = f"Se realizó mantenimiento preventivo tipo {tipo_servicio} al equipo compresor {modelo_aut} (TAG {tag_sel}) en {area_aut}, efectuando cambio de lubricantes y filtros según pauta de fábrica y validando parámetros finales."
+
+        alcance_manual = st.text_area("Alcance de la Intervención", value=alcance_val, height=100)
         
-        # Texto con parámetros de presión dinámicos [cite: 15]
         texto_conclusiones_default = f"El equipo se encuentra funcionando en óptimas condiciones, bajo parámetros normales de funcionamiento (Presión carga: {p_carga} bar / descarga: {p_descarga} bar, Temp: {temp_salida} °C), con nivel de aceite dentro del rango establecido, sin fugas en circuitos de aire/aceite y con filtros sin saturación."
         conclusiones_manual = st.text_area("Condición final y estado de entrega", value=texto_conclusiones_default, height=150)
 
@@ -124,7 +127,17 @@ with tab1:
             doc.save(bio)
             bio.seek(0)
             
-            st.success(f"✅ ¡Informe generado con parámetros de {p_carga}/{p_descarga} bar!")
+            st.success(f"✅ ¡Informe de {tipo_servicio} generado!")
             st.download_button("📥 DESCARGAR INFORME WORD", bio, f"Reporte_{tag_sel}.docx")
         except Exception as e:
             st.error(f"Error al generar el documento: {e}")
+
+with tab2:
+    st.subheader("Registros Almacenados")
+    st.dataframe(df_historial)
+    if not df_historial.empty:
+        fila_a_borrar = st.number_input("Fila a eliminar", min_value=0, max_value=len(df_historial)-1, step=1)
+        if st.button("Eliminar Registro"):
+            df_historial = df_historial.drop(df_historial.index[fila_a_borrar])
+            df_historial.to_csv(DB_FILE, index=False)
+            st.rerun()

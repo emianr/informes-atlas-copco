@@ -1,4 +1,4 @@
-import streamlit as st
+iimport streamlit as st
 from docxtpl import DocxTemplate
 from datetime import datetime
 import io
@@ -44,14 +44,16 @@ with tab1:
         tag_sel = st.selectbox("Seleccione el TAG", list(equipos_db.keys()))
         modelo_aut, serie_aut, area_aut, clase_aut = equipos_db[tag_sel]
         
+        ultimo_registro = df_historial[df_historial["TAG"] == tag_sel].tail(1)
+        h_sugerida = int(ultimo_registro["Horas_Marcha"].values[0]) if not ultimo_registro.empty else 0
+        
         c1, c2 = st.columns(2)
         with c1:
             fecha_sel = st.date_input("Fecha", datetime.now())
-            # Ajustado a 'cliente_contacto' según tu imagen de plantilla
             cliente_cont = st.text_input("Contacto / Dueño de Área", "Pamela Tapia")
             tipo_servicio = st.selectbox("Tipo de Mantención", ["INSPECCIÓN", "P1", "P2", "P3"])
         with c2:
-            h_marcha_val = st.number_input("Horas Totales Marcha", value=0)
+            h_marcha_val = st.number_input("Horas Totales Marcha", value=h_sugerida)
             h_carga_val = st.number_input("Horas Carga", value=0)
             tec1_input = st.text_input("Técnico Responsable", "Ignacio Morales")
 
@@ -60,17 +62,32 @@ with tab1:
         with p1: p_carga = st.text_input("Carga (bar)", "6.4")
         with p2: p_descarga = st.text_input("Descarga (bar)", "6.8")
         with p3: temp_sal = st.text_input("Temp (°C)", "80")
+            
+        t1, t2 = st.columns(2)
+        with t1:
+            tec2_input = st.text_input("Técnico 2", "Emian Sanchez")
+            act1 = st.text_input("Actividad", "M.OB.ST")
+        with t2:
+            h1 = st.text_input("Hrs T1", "8")
+            h2 = st.text_input("Hrs T2", "8")
 
-        # Texto de alcance solicitado: compacto y sin saltos de línea
+        # --- TEXTO DE ALCANCE ACTUALIZADO SEGÚN TU SOLICITUD ---
+        # Se eliminan espacios en blanco extras y se usa la nueva estructura
         alcance_val = f"Se realizó inspección a equipo compresor {modelo_aut} con identificación TAG {tag_sel} de {clase_aut}, {area_aut}, conforme a procedimientos internos y buenas prácticas de mantenimiento."
-        alcance_manual = st.text_area("Alcance", value=alcance_val, height=70)
         
-        concl_val = f"El equipo se encuentra funcionando en óptimas condiciones, bajo parámetros normales de funcionamiento (Carga: {p_carga} bar / Descarga: {p_descarga} bar, Temp: {temp_sal} °C), con nivel de aceite en rango, sin fugas y filtros operativos."
-        conclusiones_manual = st.text_area("Condición Final", value=concl_val, height=70)
+        alcance_manual = st.text_area("Alcance de la Intervención", value=alcance_val, height=80)
+        
+        concl_val = f"El equipo se encuentra funcionando en óptimas condiciones, bajo parámetros normales de funcionamiento (Presión carga: {p_carga} bar / descarga: {p_descarga} bar, Temp: {temp_sal} °C), con nivel de aceite dentro del rango establecido, sin fugas en circuitos de aire/aceite y con filtros sin saturación."
+        conclusiones_manual = st.text_area("Condición Final", value=concl_val, height=100)
 
-        enviar = st.form_submit_button("GENERAR INFORME SIN ESPACIOS")
+        enviar = st.form_submit_button("GENERAR INFORME WORD")
 
     if enviar:
+        nuevo = pd.DataFrame([[fecha_sel, tag_sel, h_marcha_val, h_carga_val, tec1_input, cliente_cont]], 
+                             columns=["Fecha", "TAG", "Horas_Marcha", "Horas_Carga", "Tecnico", "Contacto"])
+        df_historial = pd.concat([df_historial, nuevo], ignore_index=True)
+        df_historial.to_csv(DB_FILE, index=False)
+        
         try:
             doc = DocxTemplate("InformeInspección.docx")
             meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
@@ -78,21 +95,19 @@ with tab1:
             
             contexto = {
                 "fecha": fecha_txt,
-                "cliente_contacto": cliente_cont, # Coincide con tu imagen
+                "cliente": "MINERA SPENCE S.A",
+                "cliente_contact": cliente_cont,
                 "tag": tag_sel,
                 "equipo_modelo": modelo_aut,
                 "serie": serie_aut,
                 "area": area_aut,
                 "clase_area": clase_aut,
                 "tipo_orden": tipo_servicio,
-                "tecnico_1": tec1_input,
-                "tecnico_2": "Emian Sanchez",
-                "act_1": "M.OB.ST",
-                "h_1": "8", "h_2": "8",
+                "tecnico_1": tec1_input, "act_1": act1, "h_1": h1,
+                "tecnico_2": tec2_input, "h_2": h2,
                 "horas_marcha": f"{h_marcha_val} Hrs.",
                 "horas_totales_despues": f"{h_marcha_val} Hrs.",
                 "horas_carga_despues": f"{h_carga_val} Hrs.",
-                # .strip() elimina espacios invisibles que crean hojas extra
                 "alcanze_intervencion": alcance_manual.strip(),
                 "estado_entrega": conclusiones_manual.strip()
             }
@@ -101,7 +116,11 @@ with tab1:
             bio = io.BytesIO()
             doc.save(bio)
             bio.seek(0)
-            st.success("✅ ¡Hecho! Revisa que el espacio haya desaparecido.")
-            st.download_button("📥 DESCARGAR", bio, f"Reporte_{tag_sel}.docx")
+            st.success(f"✅ Informe de {tag_sel} generado correctamente.")
+            st.download_button("📥 DESCARGAR REPORTE", bio, f"Reporte_{tag_sel}.docx")
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"Error técnico: {e}")
+
+with tab2:
+    st.subheader("Historial de Inspecciones")
+    st.dataframe(df_historial)

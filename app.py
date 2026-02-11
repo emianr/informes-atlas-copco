@@ -1,4 +1,4 @@
-iimport streamlit as st
+import streamlit as st
 from docxtpl import DocxTemplate
 from datetime import datetime
 import io
@@ -124,3 +124,4 @@ with tab1:
 with tab2:
     st.subheader("Historial de Inspecciones")
     st.dataframe(df_historial)
+

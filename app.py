@@ -8,8 +8,7 @@ st.set_page_config(page_title="Atlas Copco App", layout="wide")
 
 st.title("🚀 Generador Automatizado Atlas Copco")
 
-# --- BASE DE DATOS DE EQUIPOS (Basada en tu imagen) ---
-# Estructura: "TAG": ["Modelo", "Serie", "Área"]
+# --- BASE DE DATOS ACTUALIZADA ---
 equipos_db = {
     "70-GC-013": ["GA 132", "AIF095296", "Descarga acido"],
     "70-GC-014": ["GA 132", "AIF095297", "Descarga acido"],
@@ -27,20 +26,17 @@ equipos_db = {
     "20-GC-001": ["GA 75", "AII482673", "TRUCK SHOP"],
     "20-GC-002": ["GA 75", "AII482674", "TRUCK SHOP"],
     "20-GC-003": ["GA 90", "AIF095178", "TRUCK SHOP"],
-    "TALLER-01": ["GA 18", "API335343", "TALLER"] # Agregado por referencia
+    "TALLER-01": ["GA 18", "API335343", "TALLER"]
 }
 
 with st.form("editor_informe"):
     st.subheader("1. Selección de Equipo")
     
-    # El usuario elige el TAG y lo demás se autocompleta internamente
-    tag_sel = st.selectbox("Busque y seleccione el TAG del equipo", list(equipos_db.keys()))
+    # Menú para elegir el TAG
+    tag_sel = st.selectbox("Seleccione el TAG del equipo", list(equipos_db.keys()))
     
-    # Recuperamos los datos de la DB
-    datos_equipo = equipos_db[tag_sel]
-    modelo_aut = datos_equipo[0]
-    serie_aut = datos_equipo[1]
-    area_aut = datos_equipo[2]
+    # Datos automáticos
+    modelo_aut, serie_aut, area_aut = equipos_db[tag_sel]
     
     col1, col2 = st.columns(2)
     with col1:
@@ -49,15 +45,13 @@ with st.form("editor_informe"):
         tipo_servicio = st.selectbox("Tipo de Servicio", ["INSPECCIÓN", "P1", "P2", "P3"])
     
     with col2:
-        # Mostramos los datos automáticos (solo lectura para confirmar)
-        st.info(f"**Modelo:** {modelo_aut} | **Serie:** {serie_aut} | **Área:** {area_aut}")
+        st.info(f"**Auto-completado:** {modelo_aut} | {serie_aut} | {area_aut}")
         tec1 = st.text_input("Técnico Responsable", "Ignacio Morales")
         h_marcha = st.number_input("Horas Totales Marcha", value=0)
         h_carga = st.number_input("Horas Carga", value=0)
 
-    st.subheader("2. Textos del Informe")
-    
-    # Alcance automático generado con la nueva lógica
+    st.subheader("2. Textos Editables")
+    # Este texto es el que se inyecta en {{ alcanze_intervencion }}
     alcance_final = f"Se realizó inspección a equipo compresor {modelo_aut} con identificación TAG {tag_sel} de {area_aut}."
     alcance_manual = st.text_area("Alcance de la Intervención", value=alcance_final)
     
@@ -74,13 +68,12 @@ if preparar:
         meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
         fecha_texto = f"{fecha_sel.day} de {meses[fecha_sel.month - 1]} de {fecha_sel.year}"
 
-        # Mapeo para el Word
         contexto = {
             "fecha": fecha_texto,
             "cliente": cliente_nom,
             "equipo_modelo": modelo_aut,
             "area": area_aut,
-            "tag": tag_sel,
+            "tag": tag_sel,        # <-- Esto llena el {{ tag }} en tu Word
             "serie": serie_aut,
             "tipo_orden": tipo_servicio,
             "tecnico_1": tec1,
@@ -88,7 +81,7 @@ if preparar:
             "horas_carga_despues": f"{h_carga} Hrs.",
             "alcanze_intervencion": alcance_manual,
             "estado_entrega": conclusiones_manual,
-            "nota_overhaul": "" # Se envía vacío para eliminar la nota técnica
+            "nota_overhaul": "" 
         }
         
         doc.render(contexto)
@@ -97,7 +90,7 @@ if preparar:
         doc.save(output)
         output.seek(0)
         
-        st.success(f"✅ ¡Informe para el TAG {tag_sel} generado!")
+        st.success(f"✅ ¡Informe para {tag_sel} listo!")
         
         st.download_button(
             label="📥 DESCARGAR WORD",

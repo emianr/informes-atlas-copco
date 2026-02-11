@@ -8,7 +8,7 @@ st.set_page_config(page_title="Atlas Copco App", layout="wide")
 
 st.title("🚀 Generador de Informes Atlas Copco")
 
-# --- BASE DE DATOS DE EQUIPOS (Basada en tu tabla) ---
+# --- BASE DE DATOS DE EQUIPOS ---
 modelos_equipos = ["GA 132", "GA 45", "ZT 37", "GA 30", "GA 250", "GA 37", "GA 75", "GA 90", "GA 18"]
 areas_trabajo = ["Descarga acido", "PLANTA SX", "PLANTA BORRA", "ÁREA HÚMEDA", "SECA", "TRUCK SHOP", "TALLER"]
 
@@ -19,9 +19,7 @@ with st.form("editor_informe"):
     with col1:
         fecha_sel = st.date_input("Fecha del Servicio", datetime.now())
         cliente_nom = st.text_input("Cliente", "MINERA SPENCE S.A")
-        # Nuevo: Selección de Modelo
         modelo_sel = st.selectbox("Modelo del Equipo", modelos_equipos)
-        # Nuevo: Selección de Área
         area_sel = st.selectbox("Área de Trabajo", areas_trabajo)
     
     with col2:
@@ -29,7 +27,7 @@ with st.form("editor_informe"):
         serie = st.text_input("Número de Serie", "AIF095301")
         tipo_servicio = st.selectbox("Tipo de Servicio", ["INSPECCIÓN", "P1", "P2", "P3"])
 
-    st.subheader("2. Contadores y Personal")
+    st.subheader("2. Contadores y Responsable")
     c1, c2, c3 = st.columns(3)
     with c1:
         h_marcha = st.number_input("Horas Totales Marcha", value=65287)
@@ -38,15 +36,17 @@ with st.form("editor_informe"):
     with c3:
         tec1 = st.text_input("Técnico Responsable", "Ignacio Morales")
 
-    st.subheader("3. Edición de Textos del Informe")
-    # Aquí puedes escribir lo que quieras para que aparezca en el Word
-    alcance_manual = st.text_area("Alcance de la Intervención", 
-        f"Se realizó inspección a equipo compresor {modelo_sel} con identificación TAG {tag_equipo} de {area_sel}.")
+    st.subheader("3. Textos del Informe (Editables)")
     
-    actividades_manual = st.text_area("Actividades Ejecutadas", 
-        "Escriba aquí las tareas realizadas...")
+    # Alcance automático pero editable
+    alcance_predefinido = f"Se realizó inspección a equipo compresor {modelo_sel} con identificación TAG {tag_equipo} de {area_sel}."
+    alcance_manual = st.text_area("Alcance de la Intervención", value=alcance_predefinido)
+    
+    # Nuevo cuadro de Conclusiones para el Word
+    conclusiones_manual = st.text_area("Conclusiones y Recomendaciones", 
+        value="El equipo queda operativo y funcionando bajo parámetros normales. Se recomienda seguir plan de mantenimiento preventivo.")
 
-    preparar = st.form_submit_button("1. GENERAR INFORME")
+    preparar = st.form_submit_button("GENERAR INFORME")
 
 if preparar:
     try:
@@ -59,22 +59,22 @@ if preparar:
         # Nota de overhaul automática
         aviso_overhaul = ""
         if h_marcha > 40000:
-            aviso_overhaul = "NOTA TÉCNICA: Equipo sobre 40.000 hrs. Se recomienda Overhaul."
+            aviso_overhaul = "NOTA TÉCNICA: El equipo ha superado las 40.000 horas de operación. Se recomienda coordinar Overhaul."
 
         # Mapeo para el Word
         contexto = {
             "fecha": fecha_texto,
             "cliente": cliente_nom,
-            "equipo_modelo": modelo_sel, # Nueva etiqueta
-            "area": area_sel,           # Nueva etiqueta
+            "equipo_modelo": modelo_sel,
+            "area": area_sel,
             "tag": tag_equipo,
             "serie": serie,
             "tipo_orden": tipo_servicio,
             "tecnico_1": tec1,
             "horas_totales_despues": f"{h_marcha} Hrs.",
             "horas_carga_despues": f"{h_carga} Hrs.",
-            "alcanze_intervencion": alcance_manual, # Etiqueta para el párrafo de alcance
-            "actividades_ejecutadas": actividades_manual, # Etiqueta para las tareas
+            "alcanze_intervencion": alcance_manual,
+            "estado_entrega": conclusiones_manual, # Etiqueta para conclusiones
             "nota_overhaul": aviso_overhaul
         }
         
@@ -84,7 +84,7 @@ if preparar:
         doc.save(output)
         output.seek(0)
         
-        st.success("✅ ¡Informe procesado!")
+        st.success("✅ ¡Informe listo!")
         
         st.download_button(
             label="📥 DESCARGAR WORD",

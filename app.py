@@ -10,7 +10,6 @@ st.set_page_config(page_title="Atlas Copco Tracker", layout="wide")
 # --- BASE DE DATOS LOCAL ---
 DB_FILE = "historial_horas.csv"
 
-# Función para cargar datos
 def cargar_datos():
     if os.path.exists(DB_FILE):
         df = pd.read_csv(DB_FILE)
@@ -20,6 +19,15 @@ def cargar_datos():
         return pd.DataFrame(columns=["Fecha", "TAG", "Horas_Marcha", "Horas_Carga", "Tecnico", "Contacto"])
 
 df_historial = cargar_datos()
+
+# --- DICCIONARIO DE OPERACIONES SEGÚN TIPO ---
+# Esto es lo que cambiará en "Trabajos Realizados"
+operaciones_dict = {
+    "INSPECCIÓN": "Inspección visual de equipo",
+    "P1": "Mantenimiento Preventivo P1 - Cambio de filtros y revisión general",
+    "P2": "Mantenimiento Preventivo P2 - Cambio de kit de filtros y aceite",
+    "P3": "Mantenimiento Preventivo P3 - Intervención mayor según pauta técnica"
+}
 
 # --- BASE DE DATOS DE EQUIPOS ---
 equipos_db = {
@@ -58,7 +66,8 @@ with tab1:
         with c1:
             fecha_sel = st.date_input("Fecha", datetime.now())
             cliente_cont = st.text_input("Contacto", "Pamela Tapia")
-            tipo_servicio = st.selectbox("Tipo de Mantención", ["INSPECCIÓN", "P1", "P2", "P3"])
+            # Selección de servicio que ahora controla el texto de operaciones
+            tipo_servicio = st.selectbox("Tipo de Mantención", list(operaciones_dict.keys()))
         with c2:
             h_marcha_val = st.number_input("Horas Totales Marcha", value=h_sugerida)
             h_carga_val = st.number_input("Horas Carga", value=0)
@@ -87,37 +96,34 @@ with tab1:
             doc = DocxTemplate("InformeInspección.docx")
             meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
             fecha_txt = f"{fecha_sel.day} de {meses[fecha_sel.month - 1]} de {fecha_sel.year}"
+            
+            # Obtener el texto dinámico para Operaciones
+            texto_operacion = operaciones_dict[tipo_servicio]
+
             contexto = {
                 "fecha": fecha_txt, "cliente_contact": cliente_cont, "tag": tag_sel, "equipo_modelo": modelo_aut,
                 "serie": serie_aut, "area": area_aut, "clase_area": clase_aut, "tipo_orden": tipo_servicio,
                 "tecnico_1": tec1_input, "tecnico_2": "Emian Sanchez", "act_1": "M.OB.ST", "h_1": "8", "h_2": "8",
                 "horas_marcha": f"{h_marcha_val} Hrs.", "horas_totales_despues": f"{h_marcha_val} Hrs.",
-                "horas_carga_despues": f"{h_carga_val} Hrs.", "alcanze_intervencion": alcance_manual.strip(),
-                "estado_entrega": conclusiones_manual.strip()
+                "horas_carga_despues": f"{h_carga_val} Hrs.", 
+                "alcanze_intervencion": alcance_manual.strip(), 
+                "estado_entrega": conclusiones_manual.strip(),
+                "operaciones_dinamicas": texto_operacion # Nueva variable para el Word
             }
             doc.render(contexto)
             bio = io.BytesIO()
             doc.save(bio)
             bio.seek(0)
-            st.success("✅ ¡Guardado!")
+            st.success("✅ ¡Informe generado con operaciones actualizadas!")
             st.download_button("📥 DESCARGAR", bio, f"Reporte_{tag_sel}.docx")
         except Exception as e:
             st.error(f"Error: {e}")
 
-# --- PESTAÑA HISTORIAL CON EDICIÓN DIRECTA (DATA EDITOR) ---
+# --- PESTAÑA HISTORIAL ---
 with tab2:
     st.subheader("📝 Editor de Historial")
-    st.info("💡 Puedes hacer doble clic en cualquier celda para cambiar el dato, o seleccionar una fila y presionar 'Suprimir' en tu teclado para borrar.")
-    
-    # Creamos el editor de datos
-    df_editado = st.data_editor(
-        df_historial, 
-        num_rows="dynamic", # Permite añadir y borrar filas con el botón (+) o seleccionando y borrando
-        use_container_width=True,
-        key="historial_editor"
-    )
-    
+    df_editado = st.data_editor(df_historial, num_rows="dynamic", use_container_width=True, key="historial_editor")
     if st.button("💾 GUARDAR CAMBIOS EN EL HISTORIAL"):
         df_editado.to_csv(DB_FILE, index=False)
-        st.success("¡Base de datos actualizada correctamente!")
+        st.success("¡Base de datos actualizada!")
         st.rerun()

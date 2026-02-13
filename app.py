@@ -5,21 +5,32 @@ import io
 import pandas as pd
 import os
 
-st.set_page_config(page_title="Atlas Copco Tracker", layout="wide")
+st.set_page_config(page_title="Atlas Copco Tracker - Spence", layout="wide")
 
 # --- BASE DE DATOS LOCAL ---
 DB_FILE = "historial_horas.csv"
 
-# Función para cargar datos
 def cargar_datos():
     if os.path.exists(DB_FILE):
-        df = pd.read_csv(DB_FILE)
-        df['Fecha'] = pd.to_datetime(df['Fecha']).dt.date
-        return df
+        try:
+            df = pd.read_csv(DB_FILE)
+            if not df.empty:
+                df['Fecha'] = pd.to_datetime(df['Fecha']).dt.date
+            return df
+        except:
+            return pd.DataFrame(columns=["Fecha", "TAG", "Horas_Marcha", "Horas_Carga", "Tecnico", "Contacto"])
     else:
         return pd.DataFrame(columns=["Fecha", "TAG", "Horas_Marcha", "Horas_Carga", "Tecnico", "Contacto"])
 
 df_historial = cargar_datos()
+
+# --- DICCIONARIO DE OPERACIONES ---
+operaciones_dict = {
+    "INSPECCIÓN": "Inspección visual de equipo",
+    "P1": "Mantenimiento Preventivo P1 - Cambio de filtros y revisión general",
+    "P2": "Mantenimiento Preventivo P2 - Cambio de kit de filtros y aceite",
+    "P3": "Mantenimiento Preventivo P3 - Intervención mayor según pauta técnica"
+}
 
 # --- BASE DE DATOS DE EQUIPOS ---
 equipos_db = {
@@ -42,7 +53,7 @@ equipos_db = {
     "TALLER-01": ["GA18", "API335343", "TALLER", "ÁREA SECA"]
 }
 
-st.title("🚀 Atlas Copco Tracker")
+st.title("🚀 Atlas Copco Tracker - Spence")
 
 tab1, tab2 = st.tabs(["Generar Informe", "📊 Historial Editable"])
 
@@ -51,16 +62,17 @@ with tab1:
         tag_sel = st.selectbox("Seleccione el TAG", list(equipos_db.keys()))
         modelo_aut, serie_aut, area_aut, clase_aut = equipos_db[tag_sel]
         
-        ultimo_registro = df_historial[df_historial["TAG"] == tag_sel].tail(1)
-        h_sugerida = int(ultimo_registro["Horas_Marcha"].values[0]) if not ultimo_registro.empty else 0
+        # Sugerencia de horas
+        ultimo = df_historial[df_historial["TAG"] == tag_sel].tail(1)
+        h_sug = int(ultimo["Horas_Marcha"].values[0]) if not ultimo.empty else 0
         
         c1, c2 = st.columns(2)
         with c1:
             fecha_sel = st.date_input("Fecha", datetime.now())
             cliente_cont = st.text_input("Contacto", "Pamela Tapia")
-            tipo_servicio = st.selectbox("Tipo de Mantención", ["INSPECCIÓN", "P1", "P2", "P3"])
+            tipo_servicio = st.selectbox("Tipo de Mantención", list(operaciones_dict.keys()))
         with c2:
-            h_marcha_val = st.number_input("Horas Totales Marcha", value=h_sugerida)
+            h_marcha_val = st.number_input("Horas Totales Marcha", value=h_sug)
             h_carga_val = st.number_input("Horas Carga", value=0)
             tec1_input = st.text_input("Técnico", "Ignacio Morales")
 
@@ -69,15 +81,16 @@ with tab1:
         with p2: p_descarga = st.text_input("Descarga (bar)", "6.8")
         with p3: temp_sal = st.text_input("Temp (°C)", "80")
 
-        alcance_val = f"Se realizó inspección a equipo compresor {modelo_aut} con identificación TAG {tag_sel} de {clase_aut}, {area_aut}, conforme a procedimientos internos y buenas prácticas de mantenimiento."
+        alcance_val = f"Se realizó inspección a equipo compresor {modelo_aut} con identificación TAG {tag_sel} de {clase_aut}, {area_aut}, conforme a procedimientos internos y buenas prácticas de mantenimiento." [cite: 41]
         alcance_manual = st.text_area("Alcance", value=alcance_val, height=80)
         
-        concl_val = f"El equipo se encuentra funcionando en óptimas condiciones, bajo parámetros normales de funcionamiento (Carga: {p_carga} bar / Descarga: {p_descarga} bar, Temp: {temp_sal} °C), con nivel de aceite en rango."
-        conclusiones_manual = st.text_area("Condición Final", value=concl_val, height=80)
+        concl_val = f"El equipo se encuentra funcionando en óptimas condiciones, bajo parámetros normales de funcionamiento (Carga: {p_carga} bar / Descarga: {p_descarga} bar, Temp: {temp_sal} °C), con nivel de aceite en rango." [cite: 50]
+        concl_manual = st.text_area("Condición Final", value=concl_val, height=80)
 
         enviar = st.form_submit_button("💾 GUARDAR E IMPRIMIR")
 
     if enviar:
+        # Guardar en CSV
         nuevo = pd.DataFrame([[fecha_sel, tag_sel, h_marcha_val, h_carga_val, tec1_input, cliente_cont]], 
                              columns=["Fecha", "TAG", "Horas_Marcha", "Horas_Carga", "Tecnico", "Contacto"])
         df_historial = pd.concat([df_historial, nuevo], ignore_index=True)
@@ -86,38 +99,33 @@ with tab1:
         try:
             doc = DocxTemplate("InformeInspección.docx")
             meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
-            fecha_txt = f"{fecha_sel.day} de {meses[fecha_sel.month - 1]} de {fecha_sel.year}"
+            fecha_txt = f"{fecha_sel.day} de {meses[fecha_sel.month - 1]} de {fecha_sel.year}" [cite: 36]
+            
             contexto = {
                 "fecha": fecha_txt, "cliente_contact": cliente_cont, "tag": tag_sel, "equipo_modelo": modelo_aut,
                 "serie": serie_aut, "area": area_aut, "clase_area": clase_aut, "tipo_orden": tipo_servicio,
                 "tecnico_1": tec1_input, "tecnico_2": "Emian Sanchez", "act_1": "M.OB.ST", "h_1": "8", "h_2": "8",
                 "horas_marcha": f"{h_marcha_val} Hrs.", "horas_totales_despues": f"{h_marcha_val} Hrs.",
                 "horas_carga_despues": f"{h_carga_val} Hrs.", "alcanze_intervencion": alcance_manual.strip(),
-                "estado_entrega": conclusiones_manual.strip()
+                "estado_entrega": concl_manual.strip(),
+                "operaciones_dinamicas": operaciones_dict.get(tipo_servicio, "Inspección visual")
             }
+            
             doc.render(contexto)
             bio = io.BytesIO()
             doc.save(bio)
             bio.seek(0)
-            st.success("✅ ¡Guardado!")
-            st.download_button("📥 DESCARGAR", bio, f"Reporte_{tag_sel}.docx")
+            st.success("✅ ¡Registro Guardado!")
+            st.download_button("📥 DESCARGAR REPORTE", bio, f"Reporte_{tag_sel}.docx")
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"⚠️ Error en el Word: {e}")
+            st.info("Revisa que en tu archivo Word todas las llaves {{ }} estén bien escritas y cerradas.")
 
-# --- PESTAÑA HISTORIAL CON EDICIÓN DIRECTA (DATA EDITOR) ---
 with tab2:
-    st.subheader("📝 Editor de Historial")
-    st.info("💡 Puedes hacer doble clic en cualquier celda para cambiar el dato, o seleccionar una fila y presionar 'Suprimir' en tu teclado para borrar.")
-    
-    # Creamos el editor de datos
-    df_editado = st.data_editor(
-        df_historial, 
-        num_rows="dynamic", # Permite añadir y borrar filas con el botón (+) o seleccionando y borrando
-        use_container_width=True,
-        key="historial_editor"
-    )
-    
-    if st.button("💾 GUARDAR CAMBIOS EN EL HISTORIAL"):
+    st.subheader("📝 Gestión del Historial")
+    df_fresco = cargar_datos()
+    df_editado = st.data_editor(df_fresco, num_rows="dynamic", use_container_width=True, key="edit_hist")
+    if st.button("💾 GUARDAR CAMBIOS"):
         df_editado.to_csv(DB_FILE, index=False)
-        st.success("¡Base de datos actualizada correctamente!")
+        st.success("Base de datos actualizada.")
         st.rerun()

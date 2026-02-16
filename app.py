@@ -11,23 +11,27 @@ st.set_page_config(page_title="Atlas Copco Tracker - Spence", layout="wide")
 # --- 2. BASE DE DATOS DE EQUIPOS (DICCIONARIO CENTRAL) ---
 # Aquí se guarda la información técnica de cada TAG.
 equipos_db = {
-    "70-GC-013": ["GA 132", "AIF095296", "Descarga acido", "ÁREA HÚMEDA"],
-    "70-GC-014": ["GA 132", "AIF095297", "Descarga acido", "ÁREA HÚMEDA"],
-    "050-GD-001": ["GA 45", "API542705", "PLANTA SX", "ÁREA HÚMEDA"],
-    "050-GD-002": ["GA 45", "API542706", "PLANTA SX", "ÁREA HÚMEDA"],
-    "050-GC-003": ["ZT 37", "API791692", "PLANTA SX", "ÁREA HÚMEDA"],
-    "050-GC-004": ["ZT 37", "API791693", "PLANTA SX", "ÁREA HÚMEDA"],
-    "050-GC-015": ["GA 30", "API501440", "PLANTA BORRA", "ÁREA HÚMEDA"],
-    "65-GC-011": ["GA 250", "APF253581", "PATIO ESTANQUES", "ÁREA HÚMEDA"],
-    "65-GC-009": ["GA 250", "APF253608", "PATIO ESTANQUES", "ÁREA HÚMEDA"],
-    "35-GC-006": ["GA 250", "AIF095420", "Chancado secundario", "ÁREA SECA"],
-    "35-GC-007": ["GA 250", "AIF095421", "Chancado secundario", "ÁREA SECA"],
-    "35-GC-008": ["GA 250", "AIF095302", "Chancado secundario", "ÁREA SECA"],
-    "20-GC-004": ["GA 37", "AII390776", "Mina", "MINA"],
-    "20-GC-001": ["GA 75", "AII482673", "TRUCK SHOP", "MINA"],
-    "20-GC-002": ["GA 75", "AII482674", "TRUCK SHOP", "MINA"],
-    "20-GC-003": ["GA 90", "AIF095178", "TRUCK SHOP", "MINA"],
-    "TALLER-01": ["GA18", "API335343", "TALLER", "ÁREA SECA"]
+    "70-GC-013": ["GA 132", "AIF095296", "descarga acido", "área húmeda"],
+    "70-GC-014": ["GA 132", "AIF095297", "descarga acido", "área húmeda"],
+    "050-GD-001": ["GA 45", "API542705", "planta sx", "área húmeda"],
+    "050-GD-002": ["GA 45", "API542706", "planta sx", "área húmeda"],
+    "050-GC-003": ["ZT 37", "API791692", "planta sx", "área húmeda"],
+    "050-GC-004": ["ZT 37", "API791693", "planta sx", "área húmeda"],
+    "050-CD-001": ["CD 80+", "API095825", "planta sx", "área húmeda"],
+    "050-CD-002": ["CD 80+", "API095826", "planta sx", "área húmeda"],
+    "050-GC-015": ["GA 30", "API501440", "planta borra", "área húmeda"],
+    "65-GC-011": ["GA 250", "APF253581", "patio estanques", "área húmeda"],
+    "65-GC-009": ["GA 250", "APF253608", "patio estanques", "área húmeda"],
+    "65-GD-011": ["CD 630", "WXF300015", "patio estanques", "área húmeda"], 
+    "65-GD-012": ["CD 630", "WXF300016", "patio estanques", "área húmeda"],  
+    "35-GC-006": ["GA 250", "AIF095420", "chancado secundario", "área seca"],
+    "35-GC-007": ["GA 250", "AIF095421", "chancado secundario", "área seca"],
+    "35-GC-008": ["GA 250", "AIF095302", "chancado secundario", "área seca"],
+    "20-GC-004": ["GA 37", "AII390776", "mina", "mina"],
+    "20-GC-001": ["GA 75", "AII482673", "truck shop", "mina"],
+    "20-GC-002": ["GA 75", "AII482674", "truck shop", "mina"],
+    "20-GC-003": ["GA 90", "AIF095178", "truck shop", "mina"],
+    "TALLER-01": ["GA18", "API335343", "taller", "área seca"]
 }
 
 # --- 3. CEREBRO DE TEXTOS DINÁMICOS ---
@@ -142,3 +146,4 @@ with tab2:
     if st.button("💾 GUARDAR CAMBIOS EN LA BASE DE DATOS"):
         df_ed.to_csv(DB_FILE, index=False)
         st.success("Cambios aplicados correctamente.")
+

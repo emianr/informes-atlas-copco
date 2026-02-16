@@ -33,10 +33,23 @@ operaciones_dict = {
 }
 
 equipos_db = {
-    "70-GC-013": ["GA 132", "AIF095296", "Descarga acido", "ÁREA HÚMEDA"],
-    "70-GC-014": ["GA 132", "AIF095297", "Descarga acido", "ÁREA HÚMEDA"],
-    "050-GD-001": ["GA 45", "API542705", "PLANTA SX", "ÁREA HÚMEDA"],
-    "TALLER-01": ["GA18", "API335343", "TALLER", "ÁREA SECA"]
+    "70-GC-013": ["GA 132", "AIF095296", "Descarga acido", "área húmeda"],
+    "70-GC-014": ["GA 132", "AIF095297", "Descarga acido", "área húmeda"],
+    "050-GD-001": ["GA 45", "API542705", "PLANTA SX", "área húmeda"],
+    "050-GD-002": ["GA 45", "API542706", "PLANTA SX", "área húmeda"],
+    "050-GC-003": ["ZT 37", "API791692", "PLANTA SX", "área húmeda"],
+    "050-GC-004": ["ZT 37", "API791693", "PLANTA SX", "área húmeda"],
+    "050-GC-015": ["GA 30", "API501440", "PLANTA BORRA", "área húmeda"],
+    "65-GC-011": ["GA 250", "APF253581", "PATIO ESTANQUES", "área húmeda"],
+    "65-GC-009": ["GA 250", "APF253608", "PATIO ESTANQUES", "área húmeda"],
+    "35-GC-006": ["GA 250", "AIF095420", "Chancado secundario", "área seca"],
+    "35-GC-007": ["GA 250", "AIF095421", "Chancado secundario", "área seca"],
+    "35-GC-008": ["GA 250", "AIF095302", "Chancado secundario", "área seca"],
+    "20-GC-004": ["GA 37", "AII390776", "Mina", "mina"],
+    "20-GC-001": ["GA 75", "AII482673", "TRUCK SHOP", "mina"],
+    "20-GC-002": ["GA 75", "AII482674", "TRUCK SHOP", "mina"],
+    "20-GC-003": ["GA 90", "AIF095178", "TRUCK SHOP", "mina"],
+    "TALLER-01": ["GA18", "API335343", "TALLER", "área seca"]
 }
 
 st.title("🚀 Atlas Copco Tracker - Spence")
@@ -127,3 +140,4 @@ with tab2:
         df_editado.to_csv(DB_FILE, index=False)
         st.success("Base de datos actualizada.")
         st.rerun()
+

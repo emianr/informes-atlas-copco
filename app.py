@@ -25,7 +25,6 @@ def cargar_datos():
 df_historial = cargar_datos()
 
 # --- 3. DICCIONARIOS DE DATOS (EQUIPOS COMPLETOS) ---
-# Formato: "TAG": ["Modelo", "Serie", "Ubicación", "Área"]
 equipos_db = {
     "70-GC-013": ["GA 132", "AIF095296", "descarga acido", "área húmeda"],
     "70-GC-014": ["GA 132", "AIF095297", "descarga acido", "área húmeda"],
@@ -52,62 +51,64 @@ equipos_db = {
 
 plantillas = {
     "INSPECCIÓN": {
-        "actividades": "• Inspección de fugas: Revisión visual de circuitos de aire y aceite.\n• Verificación de lubricante: Chequeo del nivel de aceite por medio del visor.\n• Revisión enfriador: Inspección visual en enfriador de aire/aceite.\n• Monitoreo de controlador: Prueba carga/descarga del equipo.",
+        "actividades": "• Inspección de fugas: Revisión visual de circuitos de aire y aceite.\n• Verificación de lubricante: Chequeo de nivel por visor.\n• Revisión enfriador: Inspección visual.\n• Monitoreo de controlador: Prueba carga/descarga.",
         "condicion": "El equipo opera bajo parámetros estables. Se observa saturación normal en enfriadores.",
-        "recomendaciones": "• Nota técnica: El equipo supera las horas recomendadas. Se recomienda overhaul."
+        "recomendaciones": "• Nota técnica: Equipo supera horas recomendadas. Se sugiere overhaul."
     },
     "P1": {
-        "actividades": "• Cambio de filtros de aire y aceite.\n• Limpieza general del equipo.\n• Verificación de parámetros operativos.",
-        "condicion": "Equipo operativo tras mantenimiento preventivo P1.",
-        "recomendaciones": "• Mantener plan de mantenimiento preventivo mensual."
+        "actividades": "• Cambio de filtros de aire y aceite.\n• Limpieza general del equipo.\n• Verificación de parámetros operativos bajo carga.",
+        "condicion": "Equipo operativo tras mantenimiento P1. Parámetros en rango nominal.",
+        "recomendaciones": "• Continuar con plan de mantenimiento preventivo."
     },
     "P2": {
-        "actividades": "• Cambio de aceite y kit de filtros.\n• Limpieza de enfriadores.\n• Engrase de rodamientos motor.",
+        "actividades": "• Cambio de aceite y kit de filtros.\n• Limpieza profunda de radiadores.\n• Engrase de rodamientos motor.",
         "condicion": "Equipo en óptimas condiciones tras servicio P2.",
-        "recomendaciones": "• Considerar limpieza preventiva del entorno."
+        "recomendaciones": "• Se sugiere limpieza frecuente del área para evitar saturación."
     }
 }
 
-# --- 4. INTERFAZ ---
+# --- 4. INTERFAZ DE USUARIO ---
 st.title("🚀 Atlas Copco Tracker - Spence")
-tab1, tab2 = st.tabs(["📋 Generar Informe", "📊 Historial"])
+tab1, tab2 = st.tabs(["📋 Generar Informe", "📊 Historial Editable"])
 
 with tab1:
-    col_a, col_b = st.columns(2)
-    with col_a:
-        tag_sel = st.selectbox("Seleccione TAG del equipo", list(equipos_db.keys()))
-    with col_b:
-        tipo_mant = st.selectbox("Tipo de Servicio", ["INSPECCIÓN", "P1", "P2"])
+    c_sel1, c_sel2 = st.columns(2)
+    with c_sel1:
+        tag_sel = st.selectbox("Seleccione el TAG del equipo", list(equipos_db.keys()))
+    with c_sel2:
+        tipo_mant = st.selectbox("Tipo de Mantención", ["INSPECCIÓN", "P1", "P2"])
 
     mod_aut, ser_aut, loc_aut, area_aut = equipos_db[tag_sel]
+    txt_auto = plantillas[tipo_mant]
     
-    # Buscar últimas horas en el historial
+    # Sugerencia de horas según último registro
     ultimo = df_historial[df_historial["TAG"] == tag_sel].tail(1)
     h_sug = int(ultimo["Horas_Marcha"].values[0]) if not ultimo.empty else 0
 
     with st.form("editor_informe"):
-        c1, c2 = st.columns(2)
-        with c1:
-            fecha_sel = st.date_input("Fecha", datetime.now())
-            cliente = st.text_input("Contacto Cliente", "Pamela Tapia")
-            tec1 = st.text_input("Técnico 1", "Ignacio Morales")
-        with c2:
-            h_m = st.number_input("Horas Marcha", value=h_sug)
-            h_c = st.number_input("Horas Carga", value=0)
+        col1, col2 = st.columns(2)
+        with col1:
+            fecha_sel = st.date_input("Fecha de atención", datetime.now())
+            cliente_cont = st.text_input("Contacto Cliente", "Pamela Tapia")
+            tec1 = st.text_input("Técnico 1 (Líder)", "Ignacio Morales")
+        with col2:
+            h_marcha = st.number_input("Horas Totales Marcha", value=h_sug)
+            h_carga = st.number_input("Horas Carga", value=0)
             tec2 = st.text_input("Técnico 2", "Emian Sanchez")
 
-        st.subheader("⚙️ Parámetros Operacionales")
+        st.subheader("⚙️ Parámetros Operacionales (Dinámicos)")
         p1, p2, p3 = st.columns(3)
-        with p1: v_p_carga = st.text_input("Presión Carga (bar)", "6.4")
-        with p2: v_p_desc = st.text_input("Presión Descarga (bar)", "6.8")
-        with p3: v_t_sal = st.text_input("Temp Salida (°C)", "80")
+        with p1: v_p_carga = st.text_input("Presión de Carga (bar)", "6.4")
+        with p2: v_p_descarga = st.text_input("Presión de Descarga (bar)", "6.8")
+        with p3: v_t_salida = st.text_input("Temp. Salida Elemento (°C)", "80")
 
+        # Áreas de texto con carga automática de plantillas
         alcance_val = f"Se realizó {tipo_mant.lower()} a equipo compresor {mod_aut} TAG {tag_sel} de {area_aut}, {loc_aut}."
-        alcance = st.text_area("Alcance", value=alcance_val)
-        ops = st.text_area("Actividades", value=plantillas[tipo_mant]["actividades"], height=150)
-        cond = st.text_area("Condición Final", value=plantillas[tipo_mant]["condicion"])
+        alcance_manual = st.text_area("Alcance del Trabajo", value=alcance_val)
+        ops_manual = st.text_area("Actividades Realizadas (Operaciones)", value=txt_auto["actividades"], height=150)
+        cond_manual = st.text_area("Condición Final", value=txt_auto["condicion"])
 
-        enviar = st.form_submit_button("GENERAR REPORTE")
+        enviar = st.form_submit_button("💾 GUARDAR Y GENERAR REPORTE")
 
     if enviar:
         try:
@@ -115,30 +116,45 @@ with tab1:
             meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
             fecha_txt = f"{fecha_sel.day} de {meses[fecha_sel.month - 1]} de {fecha_sel.year}"
 
+            # MAPEO COMPLETO HACIA ETIQUETAS {{ }} DEL WORD
             contexto = {
-                "fecha": fecha_txt, "cliente_contact": cliente, "tag": tag_sel,
-                "alcanze_intervencion": alcance, "p_carga": v_p_carga, "p_descarga": v_p_desc,
-                "temp_salida": v_t_sal, "estado_entrega": cond, "operaciones_dinamicas": ops,
-                "tecnico_1": tec1, "tecnico_2": tec2, "act_1": "Mantenimiento",
-                "h_1": "8", "h_2": "8", "equipo_modelo": mod_aut, "serie": ser_aut,
-                "horas_marcha": f"{h_m} Hrs.", "tipo_orden": tipo_mant,
-                "horas_totales_despues": h_m, "horas_carga_despues": h_c
+                "fecha": fecha_txt,
+                "cliente_contact": cliente_cont,
+                "alcanze_intervencion": alcance_manual,
+                "p_carga": v_p_carga,
+                "p_descarga": v_p_descarga,
+                "temp_salida": v_t_salida,
+                "estado_entrega": cond_manual,
+                "tecnico_1": tec1,
+                "tecnico_2": tec2,
+                "act_1": "Mantenimiento",
+                "h_1": "8", "h_2": "8",
+                "equipo_modelo": mod_aut,
+                "serie": ser_aut,
+                "horas_marcha": f"{h_marcha} Hrs.",
+                "tipo_orden": tipo_mant,
+                "horas_totales_despues": h_marcha,
+                "horas_carga_despues": h_carga,
+                "operaciones_dinamicas": ops_manual,
+                "tag": tag_sel
             }
 
             doc.render(contexto)
             output = io.BytesIO()
             doc.save(output)
             
-            # Guardar en CSV
-            nuevo = pd.DataFrame([[fecha_sel, tag_sel, h_m, h_c, tec1, tec2, cliente]], columns=df_historial.columns)
-            pd.concat([df_historial, nuevo]).to_csv(DB_FILE, index=False)
+            # Guardado en base de datos CSV
+            nuevo_reg = pd.DataFrame([[fecha_sel, tag_sel, h_marcha, h_carga, tec1, tec2, cliente_cont]], 
+                                     columns=["Fecha", "TAG", "Horas_Marcha", "Horas_Carga", "Tecnico_1", "Tecnico_2", "Contacto"])
+            df_historial = pd.concat([df_historial, nuevo_reg], ignore_index=True)
+            df_historial.to_csv(DB_FILE, index=False)
 
-            st.success("✅ Reporte listo")
-            st.download_button("📥 Descargar Word", output.getvalue(), f"Informe_{tag_sel}.docx")
+            st.success("✅ Registro guardado y reporte generado.")
+            st.download_button("📥 DESCARGAR REPORTE", output.getvalue(), f"Informe_{tag_sel}.docx")
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"❌ Error al procesar el Word: {e}")
 
 with tab2:
-    st.subheader("🛠️ Historial")
-    st.data_editor(cargar_datos(), num_rows="dynamic")
-
+    st.subheader("🛠️ Administración de Historial")
+    df_actualizado = cargar_datos()
+    st.data_editor(df_actualizado, num_rows="dynamic", use_container_width=True)

@@ -6,32 +6,29 @@ import pandas as pd
 import os
 import logging
 
-# --- LOGGING ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- 1. CONFIGURACIÓN DE LA INTERFAZ ---
 st.set_page_config(page_title="Atlas Copco Tracker - Spence", layout="wide")
 
-# --- 2. GESTIÓN DE LA BASE DE DATOS (CSV) ---
+# ─────────────────────────────────────────────
+# BASE DE DATOS CSV
+# ─────────────────────────────────────────────
 DB_FILE = "historial_horas.csv"
-COLUMNAS = ["Fecha", "TAG", "Horas_Marcha", "Horas_Carga", "Tecnico_1", "Tecnico_2", "Contacto"]
+COLUMNAS = ["Fecha", "TAG", "Horas_Marcha", "Horas_Carga", "Tecnico_1", "Tecnico_2", "Contacto", "Tipo"]
 
 def cargar_datos():
     if os.path.exists(DB_FILE):
         try:
             df = pd.read_csv(DB_FILE)
-            # Verificar que tenga las columnas esperadas
             for col in COLUMNAS:
                 if col not in df.columns:
-                    st.warning(f"⚠️ Columna '{col}' faltante en CSV. Se reiniciará la base de datos.")
-                    return pd.DataFrame(columns=COLUMNAS)
+                    df[col] = ""
             if not df.empty:
                 df['Fecha'] = pd.to_datetime(df['Fecha']).dt.date
             return df
         except Exception as e:
             st.warning(f"⚠️ No se pudo leer el historial: {e}")
-            logger.error(f"Error cargando CSV: {e}")
             return pd.DataFrame(columns=COLUMNAS)
     return pd.DataFrame(columns=COLUMNAS)
 
@@ -41,162 +38,278 @@ def guardar_datos(df):
         return True
     except Exception as e:
         st.error(f"❌ Error guardando datos: {e}")
-        logger.error(f"Error guardando CSV: {e}")
         return False
 
-# --- Inicializar session_state ---
 if "df_historial" not in st.session_state:
     st.session_state["df_historial"] = cargar_datos()
 
-# --- 3. DICCIONARIOS DE DATOS (EQUIPOS COMPLETOS) ---
+# ─────────────────────────────────────────────
+# EQUIPOS  [modelo, serie, ubicacion, area]
+# ─────────────────────────────────────────────
 equipos_db = {
-    "70-GC-013": ["GA 132", "AIF095296", "descarga acido", "área húmeda"],
-    "70-GC-014": ["GA 132", "AIF095297", "descarga acido", "área húmeda"],
-    "050-GD-001": ["GA 45", "API542705", "planta sx", "área húmeda"],
-    "050-GD-002": ["GA 45", "API542706", "planta sx", "área húmeda"],
-    "050-GC-003": ["ZT 37", "API791692", "planta sx", "área húmeda"],
-    "050-GC-004": ["ZT 37", "API791693", "planta sx", "área húmeda"],
-    "050-CD-001": ["CD 80+", "API095825", "planta sx", "área húmeda"],
-    "050-CD-002": ["CD 80+", "API095826", "planta sx", "área húmeda"],
-    "050-GC-015": ["GA 30", "API501440", "planta borra", "área húmeda"],
-    "65-GC-011": ["GA 250", "APF253581", "patio estanques", "área húmeda"],
-    "65-GC-009": ["GA 250", "APF253608", "patio estanques", "área húmeda"],
-    "65-GD-011": ["CD 630", "WXF300015", "patio estanques", "área húmeda"],
-    "65-GD-012": ["CD 630", "WXF300016", "patio estanques", "área húmeda"],
-    "35-GC-006": ["GA 250", "AIF095420", "chancado secundario", "área seca"],
-    "35-GC-007": ["GA 250", "AIF095421", "chancado secundario", "área seca"],
-    "35-GC-008": ["GA 250", "AIF095302", "chancado secundario", "área seca"],
-    "20-GC-004": ["GA 37", "AII390776", "mina", "mina"],
-    "20-GC-001": ["GA 75", "AII482673", "truck shop", "mina"],
-    "20-GC-002": ["GA 75", "AII482674", "truck shop", "mina"],
-    "20-GC-003": ["GA 90", "AIF095178", "truck shop", "mina"],
-    "TALLER-01": ["GA18", "API335343", "taller", "área seca"]
+    "70-GC-013":  ["GA 132", "AIF095296", "descarga acido",       "área húmeda"],
+    "70-GC-014":  ["GA 132", "AIF095297", "descarga acido",       "área húmeda"],
+    "050-GD-001": ["GA 45",  "API542705", "planta sx",            "área húmeda"],
+    "050-GD-002": ["GA 45",  "API542706", "planta sx",            "área húmeda"],
+    "050-GC-003": ["ZT 37",  "API791692", "planta sx",            "área húmeda"],
+    "050-GC-004": ["ZT 37",  "API791693", "planta sx",            "área húmeda"],
+    "050-CD-001": ["CD 80+", "API095825", "planta sx",            "área húmeda"],
+    "050-CD-002": ["CD 80+", "API095826", "planta sx",            "área húmeda"],
+    "050-GC-015": ["GA 30",  "API501440", "planta borra",         "área húmeda"],
+    "65-GC-011":  ["GA 250", "APF253581", "patio estanques",      "área húmeda"],
+    "65-GC-009":  ["GA 250", "APF253608", "patio estanques",      "área húmeda"],
+    "65-GD-011":  ["CD 630", "WXF300015", "patio estanques",      "área húmeda"],
+    "65-GD-012":  ["CD 630", "WXF300016", "patio estanques",      "área húmeda"],
+    "35-GC-006":  ["GA 250", "AIF095420", "chancado secundario",  "área seca"],
+    "35-GC-007":  ["GA 250", "AIF095421", "chancado secundario",  "área seca"],
+    "35-GC-008":  ["GA 250", "AIF095302", "chancado secundario",  "área seca"],
+    "20-GC-004":  ["GA 37",  "AII390776", "mina",                 "mina"],
+    "20-GC-001":  ["GA 75",  "AII482673", "truck shop",           "mina"],
+    "20-GC-002":  ["GA 75",  "AII482674", "truck shop",           "mina"],
+    "20-GC-003":  ["GA 90",  "AIF095178", "truck shop",           "mina"],
+    "TALLER-01":  ["GA 18",  "API335343", "taller",               "área seca"],
 }
 
-plantillas = {
-    "INSPECCIÓN": {
-        "actividades": "• Inspección de fugas: Revisión visual de circuitos de aire y aceite.\n• Verificación de lubricante: Chequeo de nivel por visor.\n• Revisión enfriador: Inspección visual.\n• Monitoreo de controlador: Prueba carga/descarga.",
-        "condicion": "El equipo opera bajo parámetros estables. Se observa saturación normal en enfriadores.",
-        "recomendaciones": "• Nota técnica: Equipo supera horas recomendadas. Se sugiere overhaul."
-    },
-    "P1": {
-        "actividades": "• Cambio de filtros de aire y aceite.\n• Limpieza general del equipo.\n• Verificación de parámetros operativos bajo carga.",
-        "condicion": "Equipo operativo tras mantenimiento P1. Parámetros en rango nominal.",
-        "recomendaciones": "• Continuar con plan de mantenimiento preventivo."
-    },
-    "P2": {
-        "actividades": "• Cambio de aceite y kit de filtros.\n• Limpieza profunda de radiadores.\n• Engrase de rodamientos motor.",
-        "condicion": "Equipo en óptimas condiciones tras servicio P2.",
-        "recomendaciones": "• Se sugiere limpieza frecuente del área para evitar saturación."
+# ─────────────────────────────────────────────
+# PLANTILLAS DINÁMICAS POR TIPO
+# ─────────────────────────────────────────────
+def get_plantilla(tipo, modelo, tag, ubicacion, area, p_carga, p_descarga, temp_salida):
+
+    verbo = "inspección" if tipo == "INSPECCIÓN" else ("mantención mayor" if tipo == "P3" else "mantención")
+    alcance = (
+        f"Se realizó {verbo} a equipo compresor {modelo} con identificación TAG {tag} "
+        f"de {area}, {ubicacion}, conforme a procedimientos internos y buenas prácticas de mantenimiento."
+    )
+
+    estado_op = (
+        f"• Estado operacional: Verificación de parámetros de operación "
+        f"(Presión de carga: {p_carga} bar / descarga: {p_descarga} bar) "
+        f"y temperatura de salida del elemento ({temp_salida} °C)."
+    )
+
+    if tipo == "INSPECCIÓN":
+        actividades = (
+            "• Inspección de fugas: Revisión visual de circuitos de aire y aceite.\n"
+            "• Nivel de lubricante: Chequeo del nivel de aceite por medio del visor.\n"
+            "• Revisión enfriador: Inspección visual en enfriador de aire/aceite.\n"
+            "• Revisión general: Se verifica estado de filtros de aire, válvula de corte y líneas de aire.\n"
+            "• Monitoreo de controlador: Validación de parámetros de operación, realizando prueba en carga/descarga del equipo.\n"
+            f"{estado_op}\n"
+            "• Purga condensado: Drenado de condensado del equipo."
+        )
+        condicion = (
+            "El equipo se encuentra funcionando bajo parámetros estables, con nivel de aceite "
+            "dentro del rango establecido y con filtros sin saturación."
+        )
+        recomendaciones = (
+            "• Nota técnica: El equipo supera las horas recomendadas por fábrica para mantenimiento mayor, "
+            "se recomienda enviar a overhaul o reemplazar por equipo nuevo para asegurar la confiabilidad operativa."
+        )
+        proxima_visita = "El próximo servicio recomendado es Inspección estimada requerida"
+        tipo_orden_txt = "INSPECCIÓN"
+
+    elif tipo == "P1":
+        actividades = (
+            "• Inspección de fugas: Revisión visual de circuitos de aire/aceite.\n"
+            "• Limpieza general: Limpieza general de equipo compresor.\n"
+            "• Verificación de lubricante: Revisión por visor de nivel óptimo.\n"
+            "• Chequeo enfriador: Inspección visual en enfriador de aire/aceite.\n"
+            "• Cambio filtros: Cambio de filtros de aire/aceite.\n"
+            "• Monitoreo de controlador: Validación de parámetros de operación, realizando prueba en carga/descarga del equipo.\n"
+            f"{estado_op}"
+        )
+        condicion = (
+            "El equipo se encuentra funcionando bajo parámetros estables, nivel de aceite "
+            "dentro del rango establecido y con filtros sin saturación."
+        )
+        recomendaciones = (
+            "• Plan de mantenimiento: Mantener frecuencia de inspección y drenado de condensados según plan preventivo vigente.\n"
+            "• Control ambiental: Considerar limpieza preventiva del entorno y radiadores debido a la alta "
+            "contaminación del sector, con el fin de prolongar la vida útil de los componentes."
+        )
+        proxima_visita = "El próximo servicio recomendado es P2 estimada requerida"
+        tipo_orden_txt = "Mantención P1"
+
+    elif tipo == "P2":
+        actividades = (
+            "• Inspección de fugas: Revisión visual de circuitos de aire/aceite.\n"
+            "• Limpieza general: Limpieza general de equipo compresor.\n"
+            "• Cambio de lubricante: Se realiza drenado con cambio de aceite y revisión por visor.\n"
+            "• Chequeo enfriador: Inspección visual en enfriador de aire/aceite.\n"
+            "• Cambio filtros: Cambio de filtros de aire/aceite.\n"
+            "• Monitoreo de controlador: Validación de parámetros de operación, realizando prueba en carga/descarga del equipo.\n"
+            f"{estado_op}"
+        )
+        condicion = (
+            "El equipo se encuentra funcionando bajo parámetros estables, nivel de aceite "
+            "dentro del rango establecido y con filtros sin saturación.\n"
+            "Se detectan enfriadores saturados por contaminación, pero sin fugas visibles."
+        )
+        recomendaciones = (
+            "• Plan de mantenimiento: Mantener frecuencia de inspección y drenado de condensados según plan preventivo vigente.\n"
+            "• Control ambiental: Considerar limpieza preventiva del entorno y radiadores debido a la alta "
+            "contaminación del sector, con el fin de prolongar la vida útil de los componentes."
+        )
+        proxima_visita = "El próximo servicio recomendado es P3 estimada requerida"
+        tipo_orden_txt = "Mantención P2"
+
+    else:  # P3
+        actividades = (
+            "• Inspección de fugas: Revisión visual de circuitos de aire/aceite.\n"
+            "• Limpieza profunda: Limpieza profunda de enfriadores y componentes internos.\n"
+            "• Cambio de lubricante: Drenado completo con cambio de aceite y revisión por visor.\n"
+            "• Cambio filtros: Cambio de filtros de aire, aceite y separador.\n"
+            "• Engrase rodamientos: Engrase de rodamientos del motor eléctrico.\n"
+            "• Revisión válvulas: Inspección y limpieza de válvula de mínima y anti-retorno.\n"
+            "• Monitoreo de controlador: Validación de parámetros de operación, realizando prueba en carga/descarga del equipo.\n"
+            f"{estado_op}"
+        )
+        condicion = (
+            "El equipo se encuentra en óptimas condiciones tras mantención mayor. "
+            "Parámetros en rango nominal, nivel de aceite correcto y filtros nuevos instalados."
+        )
+        recomendaciones = (
+            "• Plan de mantenimiento: Continuar con plan de mantenimiento preventivo.\n"
+            "• Próxima intervención: Programar próxima mantención mayor según horas de operación del equipo."
+        )
+        proxima_visita = "El próximo servicio recomendado es Inspección estimada requerida"
+        tipo_orden_txt = "Mantención P3"
+
+    return {
+        "alcance": alcance,
+        "actividades": actividades,
+        "condicion": condicion,
+        "recomendaciones": recomendaciones,
+        "proxima_visita": proxima_visita,
+        "tipo_orden_txt": tipo_orden_txt,
     }
-}
 
-TEMPLATE_PATH = "templates/InformeInspección.docx"
-
-# --- 4. INTERFAZ DE USUARIO ---
+# ─────────────────────────────────────────────
+# UI
+# ─────────────────────────────────────────────
 st.title("🚀 Atlas Copco Tracker - Spence")
-tab1, tab2 = st.tabs(["📋 Generar Informe", "📊 Historial Editable"])
+tab1, tab2 = st.tabs(["📋 Generar Informe", "📊 Historial"])
 
 with tab1:
-    c_sel1, c_sel2 = st.columns(2)
-    with c_sel1:
-        tag_sel = st.selectbox("Seleccione el TAG del equipo", list(equipos_db.keys()))
-    with c_sel2:
-        tipo_mant = st.selectbox("Tipo de Mantención", ["INSPECCIÓN", "P1", "P2"])
 
+    col_tag, col_tipo = st.columns(2)
+    with col_tag:
+        tag_sel = st.selectbox("🔧 TAG del equipo", list(equipos_db.keys()))
+    with col_tipo:
+        tipo_mant = st.selectbox("📋 Tipo de Mantención", ["INSPECCIÓN", "P1", "P2", "P3"])
+
+    # Info automática del equipo seleccionado
     mod_aut, ser_aut, loc_aut, area_aut = equipos_db[tag_sel]
-    txt_auto = plantillas[tipo_mant]
+    st.info(f"**Equipo:** {mod_aut} &nbsp;|&nbsp; **Serie:** {ser_aut} &nbsp;|&nbsp; **Ubicación:** {loc_aut} &nbsp;|&nbsp; **Área:** {area_aut}")
 
-    # Sugerencia de horas según último registro (usando session_state)
+    # Último registro del equipo
     df_actual = st.session_state["df_historial"]
     ultimo = df_actual[df_actual["TAG"] == tag_sel].tail(1)
-    h_sug = int(ultimo["Horas_Marcha"].values[0]) if not ultimo.empty else 0
+    h_sug       = int(ultimo["Horas_Marcha"].values[0]) if not ultimo.empty else 0
+    h_sug_carga = int(ultimo["Horas_Carga"].values[0])  if not ultimo.empty else 0
+    if not ultimo.empty:
+        ultimo_tipo = ultimo["Tipo"].values[0] if "Tipo" in ultimo.columns else "—"
+        st.caption(f"📅 Último registro: **{ultimo['Fecha'].values[0]}** — {ultimo_tipo} — {h_sug} hrs marcha")
 
-    # Valores por defecto desde secrets (con fallback vacío)
-    default_contacto = st.secrets.get("contacto_default", "Pamela Tapia") if hasattr(st, "secrets") else "Pamela Tapia"
-    default_tec1     = st.secrets.get("tec1_default", "Ignacio Morales") if hasattr(st, "secrets") else "Ignacio Morales"
-    default_tec2     = st.secrets.get("tec2_default", "Emian Sanchez") if hasattr(st, "secrets") else "Emian Sanchez"
+    st.divider()
 
     with st.form("editor_informe"):
-        col1, col2 = st.columns(2)
-        with col1:
+
+        st.subheader("👤 Datos Generales")
+        c1, c2 = st.columns(2)
+        with c1:
             fecha_sel    = st.date_input("Fecha de atención", datetime.now())
-            cliente_cont = st.text_input("Contacto Cliente", default_contacto)
+            default_tec1 = st.secrets.get("tec1_default", "Ignacio Morales") if hasattr(st, "secrets") else "Ignacio Morales"
             tec1         = st.text_input("Técnico 1 (Líder)", default_tec1)
-        with col2:
-            h_marcha = st.number_input("Horas Totales Marcha", value=h_sug)
-            h_carga  = st.number_input("Horas Carga", value=0)
-            tec2     = st.text_input("Técnico 2", default_tec2)
+        with c2:
+            default_contacto = st.secrets.get("contacto_default", "Pamela Tapia") if hasattr(st, "secrets") else "Pamela Tapia"
+            cliente_cont     = st.text_input("Contacto Cliente", default_contacto)
+            default_tec2     = st.secrets.get("tec2_default", "Emian Sanchez") if hasattr(st, "secrets") else "Emian Sanchez"
+            tec2             = st.text_input("Técnico 2", default_tec2)
 
-        st.subheader("⚙️ Parámetros Operacionales (Dinámicos)")
-        p1, p2, p3 = st.columns(3)
-        with p1: v_p_carga    = st.text_input("Presión de Carga (bar)", "6.4")
-        with p2: v_p_descarga = st.text_input("Presión de Descarga (bar)", "6.8")
-        with p3: v_t_salida   = st.text_input("Temp. Salida Elemento (°C)", "80")
+        st.subheader("⏱️ Horas del Equipo")
+        ch1, ch2 = st.columns(2)
+        with ch1:
+            h_marcha = st.number_input("Horas Totales Marcha", value=h_sug, step=1)
+        with ch2:
+            h_carga = st.number_input("Horas Carga", value=h_sug_carga, step=1)
 
-        alcance_val    = f"Se realizó {tipo_mant.lower()} a equipo compresor {mod_aut} TAG {tag_sel} de {area_aut}, {loc_aut}."
-        alcance_manual = st.text_area("Alcance del Trabajo", value=alcance_val)
-        ops_manual     = st.text_area("Actividades Realizadas (Operaciones)", value=txt_auto["actividades"], height=150)
-        cond_manual    = st.text_area("Condición Final", value=txt_auto["condicion"])
-        rec_manual     = st.text_area("Recomendaciones", value=txt_auto["recomendaciones"])
+        st.subheader("⚙️ Parámetros Operacionales")
+        cp1, cp2, cp3 = st.columns(3)
+        with cp1: v_p_carga    = st.text_input("Presión de Carga (bar)", "6.4")
+        with cp2: v_p_descarga = st.text_input("Presión de Descarga (bar)", "6.8")
+        with cp3: v_t_salida   = st.text_input("Temp. Salida Elemento (°C)", "80")
 
-        enviar = st.form_submit_button("💾 GUARDAR Y GENERAR REPORTE")
+        st.subheader("📝 Contenido del Informe")
+        st.caption("Pre-llenado automático según TAG y tipo de mantención — puedes editar antes de generar.")
+
+        tpl = get_plantilla(tipo_mant, mod_aut, tag_sel, loc_aut, area_aut,
+                            v_p_carga, v_p_descarga, v_t_salida)
+
+        alcance_manual     = st.text_area("Alcance de la Intervención", value=tpl["alcance"],      height=80)
+        actividades_manual = st.text_area("Actividades Ejecutadas",     value=tpl["actividades"],  height=230)
+        condicion_manual   = st.text_area("Condición Final",            value=tpl["condicion"],    height=100)
+        rec_manual         = st.text_area("Recomendaciones",            value=tpl["recomendaciones"], height=100)
+
+        st.divider()
+        enviar = st.form_submit_button("💾 GUARDAR Y GENERAR REPORTE", use_container_width=True)
 
     if enviar:
-        # Validar que existe el template Word
+        TEMPLATE_PATH = "templates/InformeInspección.docx"
         if not os.path.exists(TEMPLATE_PATH):
-            st.error(f"❌ Template Word no encontrado en '{TEMPLATE_PATH}'. Asegúrate de subir el archivo al repositorio dentro de la carpeta 'templates/'.")
+            st.error(f"❌ Template Word no encontrado en '{TEMPLATE_PATH}'.")
             st.stop()
-
         try:
             doc = DocxTemplate(TEMPLATE_PATH)
-            meses = ["enero","febrero","marzo","abril","mayo","junio",
-                     "julio","agosto","septiembre","octubre","noviembre","diciembre"]
+            meses     = ["enero","febrero","marzo","abril","mayo","junio",
+                         "julio","agosto","septiembre","octubre","noviembre","diciembre"]
             fecha_txt = f"{fecha_sel.day} de {meses[fecha_sel.month - 1]} de {fecha_sel.year}"
 
             contexto = {
-                "fecha": fecha_txt,
-                "cliente_contact": cliente_cont,
-                "alcanze_intervencion": alcance_manual,
-                "p_carga": v_p_carga,
-                "p_descarga": v_p_descarga,
-                "temp_salida": v_t_salida,
-                "estado_entrega": cond_manual,
-                "tecnico_1": tec1,
-                "tecnico_2": tec2,
-                "act_1": "Mantenimiento",
-                "h_1": "8", "h_2": "8",
-                "equipo_modelo": mod_aut,
-                "serie": ser_aut,
-                "horas_marcha": f"{h_marcha} Hrs.",
-                "tipo_orden": tipo_mant,
-                "horas_totales_despues": h_marcha,
-                "horas_carga_despues": h_carga,
-                "operaciones_dinamicas": ops_manual,
-                "recomendaciones": rec_manual,
-                "tag": tag_sel
+                "fecha":                  fecha_txt,
+                "cliente_contact":        cliente_cont,
+                "alcanze_intervencion":   alcance_manual,
+                "operaciones_dinamicas":  actividades_manual,
+                "p_carga":                v_p_carga,
+                "p_descarga":             v_p_descarga,
+                "temp_salida":            v_t_salida,
+                "estado_entrega":         condicion_manual,
+                "recomendaciones":        rec_manual,
+                "proxima_visita":         tpl["proxima_visita"],
+                "tecnico_1":              tec1,
+                "tecnico_2":              tec2,
+                "act_1":                  "Mantenimiento",
+                "h_1":                    "8",
+                "h_2":                    "8",
+                "equipo_modelo":          mod_aut,
+                "serie":                  ser_aut,
+                "horas_marcha":           f"{h_marcha} Hrs.",
+                "tipo_orden":             tpl["tipo_orden_txt"],
+                "horas_totales_despues":  h_marcha,
+                "horas_carga_despues":    h_carga,
+                "tag":                    tag_sel,
             }
 
             doc.render(contexto)
             output = io.BytesIO()
             doc.save(output)
 
-            # Guardar en session_state y en CSV
             nuevo_reg = pd.DataFrame(
-                [[fecha_sel, tag_sel, h_marcha, h_carga, tec1, tec2, cliente_cont]],
+                [[fecha_sel, tag_sel, h_marcha, h_carga, tec1, tec2, cliente_cont, tipo_mant]],
                 columns=COLUMNAS
             )
             st.session_state["df_historial"] = pd.concat(
                 [st.session_state["df_historial"], nuevo_reg], ignore_index=True
             )
-            if guardar_datos(st.session_state["df_historial"]):
-                st.success("✅ Registro guardado y reporte generado.")
-            
+            guardar_datos(st.session_state["df_historial"])
+
+            st.success(f"✅ Informe generado: {tpl['tipo_orden_txt']} — {tag_sel} — {fecha_txt}")
             st.download_button(
                 "📥 DESCARGAR REPORTE",
                 output.getvalue(),
-                f"Informe_{tag_sel}_{fecha_sel}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                f"Informe_{tipo_mant}_{tag_sel}_{fecha_sel}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True
             )
 
         except Exception as e:
@@ -204,21 +317,27 @@ with tab1:
             logger.error(f"Error generando reporte: {e}")
 
 with tab2:
-    st.subheader("🛠️ Administración de Historial")
-    df_editable = st.data_editor(
-        st.session_state["df_historial"],
-        num_rows="dynamic",
-        use_container_width=True,
-        key="data_editor"
-    )
+    st.subheader("🛠️ Historial de Mantenciones")
 
-    col_save, col_reload = st.columns([1, 5])
-    with col_save:
+    fc1, fc2 = st.columns(2)
+    with fc1:
+        filtro_tag  = st.selectbox("Filtrar por TAG",  ["Todos"] + list(equipos_db.keys()))
+    with fc2:
+        filtro_tipo = st.selectbox("Filtrar por Tipo", ["Todos", "INSPECCIÓN", "P1", "P2", "P3"])
+
+    df_view = st.session_state["df_historial"].copy()
+    if filtro_tag  != "Todos": df_view = df_view[df_view["TAG"]  == filtro_tag]
+    if filtro_tipo != "Todos": df_view = df_view[df_view["Tipo"] == filtro_tipo]
+
+    df_editado = st.data_editor(df_view, num_rows="dynamic", use_container_width=True, key="editor")
+
+    cs1, cs2 = st.columns([1, 5])
+    with cs1:
         if st.button("💾 Guardar cambios"):
-            st.session_state["df_historial"] = df_editable
-            if guardar_datos(df_editable):
-                st.success("✅ Historial guardado correctamente.")
-    with col_reload:
-        if st.button("🔄 Recargar desde archivo"):
+            st.session_state["df_historial"] = df_editado
+            if guardar_datos(df_editado):
+                st.success("✅ Historial guardado.")
+    with cs2:
+        if st.button("🔄 Recargar"):
             st.session_state["df_historial"] = cargar_datos()
             st.rerun()

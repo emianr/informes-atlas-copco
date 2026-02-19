@@ -1,2 +1,5 @@
 streamlit
 docxtpl
+pandas
+openpyxl
+supabase

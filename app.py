@@ -255,7 +255,7 @@ with tab1:
         enviar = st.form_submit_button("💾 GUARDAR Y GENERAR REPORTE", use_container_width=True)
 
     if enviar:
-        TEMPLATE_PATH = "templates/InformeInspección.docx"
+        TEMPLATE_PATH = "InformeInspección.docx"
         if not os.path.exists(TEMPLATE_PATH):
             st.error(f"❌ Template Word no encontrado en '{TEMPLATE_PATH}'.")
             st.stop()

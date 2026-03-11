@@ -10,20 +10,134 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-st.set_page_config(page_title="Atlas Copco Tracker - Spence", layout="wide")
+st.set_page_config(page_title="Centinela - Minera Spence", layout="wide", page_icon="🛡️")
 
+# ── Custom CSS ──────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@300;400;500&display=swap');
+
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+h1, h2, h3 { font-family: 'Rajdhani', sans-serif; letter-spacing: 0.03em; }
+
+.equipo-card {
+    background: linear-gradient(135deg, #1a1f2e 0%, #16213e 100%);
+    border: 1px solid #2d3748;
+    border-radius: 12px;
+    padding: 1.2rem 1.4rem;
+    margin-bottom: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+.equipo-card:hover { border-color: #4a9eff; transform: translateY(-1px); }
+.equipo-card::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+}
+.equipo-card.operativo::before { background: #48bb78; }
+.equipo-card.fuera::before { background: #f56565; }
+
+.tag-label {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.1rem; font-weight: 700;
+    color: #e2e8f0; letter-spacing: 0.05em;
+}
+.modelo-label { font-size: 0.85rem; color: #718096; margin-top: 2px; }
+.estado-badge {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 20px; font-size: 0.7rem; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+}
+.badge-op  { background: rgba(72,187,120,0.15); color: #48bb78; border: 1px solid rgba(72,187,120,0.3); }
+.badge-fs  { background: rgba(245,101,101,0.15); color: #f56565; border: 1px solid rgba(245,101,101,0.3); }
+
+.ficha-header {
+    background: linear-gradient(135deg, #1a1f2e, #0f3460);
+    border-radius: 16px; padding: 2rem;
+    border: 1px solid #2d3748; margin-bottom: 1.5rem;
+}
+.ficha-tag { font-family:'Rajdhani',sans-serif; font-size:2.2rem; font-weight:700; color:#fff; }
+.ficha-modelo { font-size:1rem; color:#90cdf4; margin-top:4px; }
+.dato-box {
+    background: #1a1f2e; border-radius:10px; padding:1rem;
+    border:1px solid #2d3748; text-align:center;
+}
+.dato-label { font-size:0.7rem; color:#718096; text-transform:uppercase; letter-spacing:0.08em; }
+.dato-valor { font-family:'Rajdhani',sans-serif; font-size:1.3rem; font-weight:600; color:#e2e8f0; margin-top:4px; }
+
+.comp-row {
+    background:#1a1f2e; border-radius:8px; padding:0.8rem 1rem;
+    border:1px solid #2d3748; margin-bottom:0.5rem;
+    display:flex; justify-content:space-between; align-items:center;
+}
+.comp-tipo { font-size:0.75rem; color:#718096; text-transform:uppercase; letter-spacing:0.06em; }
+.comp-parte { font-family:'Rajdhani',sans-serif; font-size:1rem; font-weight:600; color:#90cdf4; }
+
+.metric-card {
+    background: linear-gradient(135deg, #1a1f2e, #16213e);
+    border-radius:12px; padding:1.2rem;
+    border:1px solid #2d3748; text-align:center;
+}
+.metric-n { font-family:'Rajdhani',sans-serif; font-size:2.5rem; font-weight:700; }
+.metric-l { font-size:0.75rem; color:#718096; text-transform:uppercase; letter-spacing:0.08em; margin-top:4px; }
+</style>
+""", unsafe_allow_html=True)
+
+# ── Supabase ─────────────────────────────────────────────────────────────────
 @st.cache_resource
 def get_supabase():
     return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 supabase = get_supabase()
 
+# ── DB helpers ────────────────────────────────────────────────────────────────
+def cargar_equipos():
+    try:
+        res = supabase.table("equipos").select("*").order("tag").execute()
+        return res.data or []
+    except Exception as e:
+        st.warning(f"Error cargando equipos: {e}")
+        return []
+
+def cargar_componentes(tag):
+    try:
+        res = supabase.table("componentes").select("*").eq("equipo_tag", tag).execute()
+        return res.data or []
+    except:
+        return []
+
+def upsert_equipo(datos):
+    try:
+        supabase.table("equipos").upsert(datos, on_conflict="tag").execute()
+        return True
+    except Exception as e:
+        st.error(f"Error guardando equipo: {e}")
+        return False
+
+def guardar_componente(datos):
+    try:
+        supabase.table("componentes").insert(datos).execute()
+        return True
+    except Exception as e:
+        st.error(f"Error guardando componente: {e}")
+        return False
+
+def eliminar_componente(id):
+    try:
+        supabase.table("componentes").delete().eq("id", id).execute()
+        return True
+    except Exception as e:
+        st.error(f"Error eliminando: {e}")
+        return False
+
 def cargar_historial():
     try:
         res = supabase.table("historial").select("*").order("creado_en", desc=True).execute()
-        return res.data if res.data else []
+        return res.data or []
     except Exception as e:
-        st.warning(f"No se pudo cargar el historial: {e}")
+        st.warning(f"Error cargando historial: {e}")
         return []
 
 def guardar_registro(datos):
@@ -34,30 +148,27 @@ def guardar_registro(datos):
         st.error(f"Error guardando registro: {e}")
         return None
 
-def guardar_informe(historial_id, nombre, archivo_bytes):
+def guardar_informe_storage(historial_id, nombre, archivo_bytes):
     try:
         path = f"informes/{historial_id}/{nombre}"
         supabase.storage.from_("informes").upload(
             path, archivo_bytes,
             {"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
         )
-        supabase.table("informes").insert({
-            "historial_id": historial_id, "nombre": nombre, "ruta": path
-        }).execute()
+        supabase.table("informes").insert({"historial_id": historial_id, "nombre": nombre, "ruta": path}).execute()
         return path
     except Exception as e:
-        logger.error(f"Error guardando informe: {e}")
+        logger.error(f"Error storage: {e}")
         return None
 
 def obtener_url_informe(ruta):
     try:
         res = supabase.storage.from_("informes").create_signed_url(ruta, 3600)
         return res.get("signedURL")
-    except Exception as e:
-        logger.error(f"Error obteniendo URL: {e}")
+    except:
         return None
 
-def eliminar_registro(id):
+def eliminar_registro_hist(id):
     try:
         supabase.table("historial").delete().eq("id", id).execute()
         return True
@@ -65,312 +176,500 @@ def eliminar_registro(id):
         st.error(f"Error eliminando: {e}")
         return False
 
-equipos_lista = [
-    ["API515199","GA75","211-GC-001","CHANCADO PRIMARIO","OPERATIVO","ATLASCOPCO","CONMINUCION","SULFURO"],
-    ["API616532","GA75","211-GC-002","CHANCADO PRIMARIO","OPERATIVO","ATLASCOPCO","CONMINUCION","SULFURO"],
-    ["WUX409578","G132","318-GC-001","CHANCADO SECUNDARIO","OPERATIVO","ATLASCOPCO","CONMINUCION","SULFURO"],
-    ["WUX409516","G132","318-GC-002","CHANCADO SECUNDARIO","OPERATIVO","ATLASCOPCO","CONMINUCION","SULFURO"],
-    ["WUX409537","G132","318-GC-003","CHANCADO SECUNDARIO","OPERATIVO","ATLASCOPCO","CONMINUCION","SULFURO"],
-    ["---","OSC1200","318-OSC-001","CHANCADO SECUNDARIO","OPERATIVO","ATLASCOPCO","CONMINUCION","SULFURO"],
-    ["APIS44785601","GA55","344-GC-001","FISEMO","OPERATIVO","ATLASCOPCO","MOLIBDENO","SULFURO"],
-    ["API624285","GA90","346-GC-001","MOLIBDENO","OPERATIVO","ATLASCOPCO","MOLIBDENO","SULFURO"],
-    ["API624286","GA90","346-GC-002","MOLIBDENO","OPERATIVO","ATLASCOPCO","MOLIBDENO","SULFURO"],
-    ["CAI878332","GA15FF","LAB-GC-001","LABORATORIO","OPERATIVO","ATLASCOPCO","LABORATORIO","SULFURO"],
-    ["ITJ182547","GA15P","LAB-GC-002","LABORATORIO","OPERATIVO","ATLASCOPCO","LABORATORIO","SULFURO"],
-    ["API310344","GA30","411-GC-001","FLOCULANTE","OPERATIVO","ATLASCOPCO","FLOCULANTE","SULFURO"],
-    ["API323529","GA30","411-GC-501","FLOCULANTE","OPERATIVO","ATLASCOPCO","FLOCULANTE","SULFURO"],
-    ["APF135735","GA90+","122-GC-001","TALLER DE CAMIONES","OPERATIVO","ATLASCOPCO","TALLER DE CAMIONES","SULFURO"],
-    ["APF135800","GA90+","122-GC-002","TALLER DE CAMIONES","OPERATIVO","ATLASCOPCO","TALLER DE CAMIONES","SULFURO"],
-    ["API690916","CD185","122-GD-002","TALLER DE CAMIONES","OPERATIVO","ATLASCOPCO","TALLER DE CAMIONES","SULFURO"],
-    ["APF143254","GA315","335-GC-001","MOLIENDA","OPERATIVO","ATLASCOPCO","CONMINUCION","SULFURO"],
-    ["APF143370","GA315","335-GC-002","MOLIENDA","OPERATIVO","ATLASCOPCO","CONMINUCION","SULFURO"],
-    ["APF143685","GA315","335-GC-003","MOLIENDA","OPERATIVO","ATLASCOPCO","CONMINUCION","SULFURO"],
-    ["APF226020","CD330+","335-GD-004","MOLIENDA","OPERATIVO","ATLASCOPCO","CONMINUCION","SULFURO"],
-    ["APF143377","GA500","324-GC-001","FLOTACION","OPERATIVO","ATLASCOPCO","FLOTACION","SULFURO"],
-    ["APF143426","GA500","324-GC-002","FLOTACION","OPERATIVO","ATLASCOPCO","FLOTACION","SULFURO"],
-    ["CAI721030","GA7FF","CM871A1-1","OSMOSIS","OPERATIVO","ATLASCOPCO","RO","SULFURO"],
-    ["APF209860","ZE2","ZE-GC-001","OSMOSIS","OPERATIVO","ATLASCOPCO","RO","SULFURO"],
-    ["API080552","BD250","335-GD-001","MOLIENDA","FUERA DE SERVICIO","ATLASCOPCO","CONMINUCION","SULFURO"],
-    ["API080554","BD250","335-GD-002","MOLIENDA","FUERA DE SERVICIO","ATLASCOPCO","CONMINUCION","SULFURO"],
-    ["APF193048","BD550","335-GD-601","MOLIENDA","FUERA DE SERVICIO","ATLASCOPCO","CONMINUCION","SULFURO"],
-    ["APF207186","CD150+","346-GD-001","MOLIBDENO","FUERA DE SERVICIO","ATLASCOPCO","FLOTACION MOLIBDENO","SULFURO"],
-    ["APF135734","GA110+","122-GC-003","TALLER DE CAMIONES","FUERA DE SERVICIO","ATLASCOPCO","TALLER DE CAMIONES","SULFURO"],
-    ["API690915","CD300","122-GD-001","TALLER DE CAMIONES","FUERA DE SERVICIO","ATLASCOPCO","TALLER DE CAMIONES","SULFURO"],
-    ["UTF123UQ1","BD630","318-GD-001","CHANCADO SECUNDARIO","FUERA DE SERVICIO","ATLASCOPCO","CONMINUCION","SULFURO"],
-    ["API623258","GA90","3210-C2-1001","CHANCADO PRIMARIO","OPERATIVO","ATLASCOPCO","OXE","OXE"],
-    ["API623260","GA90","3210-C1-1001","CHANCADO PRIMARIO","OPERATIVO","ATLASCOPCO","OXE","OXE"],
-    ["API543531","GA45","3230-C3-2001","HARNERO SECUNDARIO","OPERATIVO","ATLASCOPCO","OXE","OXE"],
-    ["API543590","GA30+","3230-C4-3001","CHANCADO SECUNDARIO","OPERATIVO","ATLASCOPCO","OXE","OXE"],
-    ["API623259","GA90","3240-C5-4001","HARNERO TERCIARIO","OPERATIVO","ATLASCOPCO","OXE","OXE"],
-    ["API543530","GA45","3240-C6-5001","CHANCADO TERCIARIO","OPERATIVO","ATLASCOPCO","OXE","OXE"],
-    ["API329314","GA15+","3240-C7-6001","SILO REFINO","OPERATIVO","ATLASCOPCO","OXE","OXE"],
-    ["CAI884389","GX4","3300-C7-600","AGLOMERADO","OPERATIVO","ATLASCOPCO","OXE","OXE"],
-    ["API629823","GA55","200-GC-001","CHANCADO PRIMARIO","OPERATIVO","ATLASCOPCO","AREA SECA","OXIDO"],
-    ["API629822","GA55","200-GC-002","CHANCADO PRIMARIO","OPERATIVO","ATLASCOPCO","AREA SECA","OXIDO"],
-    ["API629825","GA55","220-GC-001","CHANCADO SECUNDARIO","OPERATIVO","ATLASCOPCO","AREA SECA","OXIDO"],
-    ["API629834","GA55","220-GC-002","CHANCADO SECUNDARIO","OPERATIVO","ATLASCOPCO","AREA SECA","OXIDO"],
-    ["API629826","GA90+","220-GC-003","CHANCADO SECUNDARIO","OPERATIVO","ATLASCOPCO","AREA SECA","OXIDO"],
-    ["APF235378","CD630","220-GD-001","CHANCADO SECUNDARIO","OPERATIVO","ATLASCOPCO","AREA SECA","OXIDO"],
-    ["API333775","GA30","AGL-GC-001","AGLOMERADO","OPERATIVO","ATLASCOPCO","AREA SECA","OXIDO"],
-    ["API334806","GA30","AGL-GC-002","AGLOMERADO","OPERATIVO","ATLASCOPCO","AREA SECA","OXIDO"],
-    ["1148","SM15","OSM-GC-001","OSMOSIS","OPERATIVO","KAESER","OSMOSIS","OXIDO"],
-    ["ITJ242366","G11P","OSM-GC-004","OSMOSIS","OPERATIVO","ATLASCOPCO","OSMOSIS","OXIDO"],
-    ["APF227050","GA90+","TCN-GC-002","TALLER DE CAMIONES NORTE","OPERATIVO","ATLASCOPCO","TALLER DE CAMIONES","OXIDO"],
-    ["API249242","CD35","MNE-GD-001","MARTILLO NEUMATICO SX","OPERATIVO","ATLASCOPCO","AREA HUMEDA","OXIDO"],
-    ["ITJ242345","G11","600-DP-002","MARTILLO NEUMATICO SX","OPERATIVO","ATLASCOPCO","AREA HUMEDA","OXIDO"],
-    ["ITJ242285","GA18","CAL-GC-001","CALENTADORES SX","OPERATIVO","ATLASCOPCO","AREA HUMEDA","OXIDO"],
-    ["ITJ242306","GA15","ENZ-GC-001","ENZUNCHADORA SX","OPERATIVO","ATLASCOPCO","AREA HUMEDA","OXIDO"],
-    ["ITJ242307","GA18","MDC-GC-001","MAQUINA DESPEGADORA SX","OPERATIVO","ATLASCOPCO","AREA HUMEDA","OXIDO"],
-    ["API587024","GA37","POST-GC-001","POST-DECANTADOR SX","OPERATIVO","ATLASCOPCO","AREA HUMEDA","OXIDO"],
-    ["ITR1354539","LF3FF","LAB-GC-004","LABORATORIO","OPERATIVO","ATLASCOPCO","LABORATORIO","OXIDO"],
-    ["ITJ242308","GA18P","LAB-GC-003","LABORATORIO","OPERATIVO","ATLASCOPCO","LABORATORIO","OXIDO"],
-    ["1118-6854188","BSD65","DES-GC-002","DESCARGA DE ACIDO","OPERATIVO","KAESER","DESCARGA DE ACIDO","OXIDO"],
-    ["1120-6867842","BSD65","DES-GC-001","DESCARGA DE ACIDO","OPERATIVO","KAESER","DESCARGA DE ACIDO","OXIDO"],
-    ["AII661966","GX18","LAB-GC-006","LABORATORIO","FUERA DE SERVICIO","ATLASCOPCO","LABORATORIO","OXIDO"],
-    ["---","FX1AD","LAB-GC-005","LABORATORIO","OPERATIVO","ATLASCOPCO","LABORATORIO",""],
-    ["349016/0334","RA-086","TCN-GC-001","TALLER DE CAMIONES NORTE","OPERATIVO","COMP AIR","",""],
-    ["APF155559","ZS75+VSD","SOPLADOR-1","SX","OPERATIVO","ATLASCOPCO","AREA HUMEDA HIDRO",""],
-    ["APFS99645701","GR200","621-GC-001","MUELLE","OPERATIVO","ATLASCOPCO","MUELLE","MUELLE"],
-    ["APF143505","GA355","621-GC-003","MUELLE","OPERATIVO","ATLASCOPCO","MUELLE","MUELLE"],
-    ["APFS99645702","GA355","621-GC-004","MUELLE","OPERATIVO","ATLASCOPCO","MUELLE","MUELLE"],
-    ["APFS99645702","GR200","621-GC-002","MUELLE","OPERATIVO","ATLASCOPCO","MUELLE","MUELLE"],
-    ["3019853","2475","OSM-GC-002","OSMOSIS","OPERATIVO","INGERSOLLRAND","OSMOSIS",""],
-    ["CAI721652","GA5FF","OSM-GC-005","OSMOSIS","OPERATIVO","ATLASCOPCO","OSMOSIS",""],
-    ["3019858","2475","OSM-GC-003","OSMOSIS","FUERA DE SERVICIO","INGERSOLL RAND","OSMOSIS",""],
-    ["1045","CSV150","641-DC-003M","MUELLE","FUERA DE SERVICIO","KAESER","MUELLE","MUELLE"],
+# ── Plantillas ────────────────────────────────────────────────────────────────
+def get_plantilla(tipo, modelo, tag, ubicacion, area, p_carga, p_descarga, temp_salida):
+    verbo = "inspeccion" if tipo == "INSPECCION" else ("mantencion mayor" if tipo == "P3" else "mantencion")
+    alcance = f"Se realizo {verbo} a equipo compresor {modelo} TAG {tag} de {area}, {ubicacion}, conforme a procedimientos internos y buenas practicas de mantenimiento."
+    estado_op = f"- Estado operacional: Presion de carga: {p_carga} bar / descarga: {p_descarga} bar, temperatura salida elemento: {temp_salida} C."
+
+    plantillas = {
+        "INSPECCION": {
+            "actividades": (
+                "- Inspeccion de fugas: Revision visual circuitos aire y aceite.\n"
+                "- Nivel de lubricante: Chequeo por visor.\n"
+                "- Revision enfriador: Inspeccion visual enfriador aire/aceite.\n"
+                "- Revision general: Filtros, valvula de corte y lineas.\n"
+                "- Monitoreo controlador: Prueba carga/descarga.\n" + estado_op + "\n"
+                "- Purga condensado: Drenado de condensado."
+            ),
+            "condicion": "El equipo se encuentra funcionando bajo parametros estables, nivel de aceite dentro del rango y filtros sin saturacion.",
+            "recomendaciones": "- Nota tecnica: El equipo supera horas recomendadas para mantenimiento mayor. Se recomienda enviar a overhaul o reemplazar.",
+            "proxima_visita": "El proximo servicio recomendado es Inspeccion estimada requerida",
+            "tipo_orden_txt": "INSPECCION",
+        },
+        "P1": {
+            "actividades": (
+                "- Inspeccion de fugas: Revision visual circuitos aire/aceite.\n"
+                "- Limpieza general del equipo.\n"
+                "- Verificacion de lubricante por visor.\n"
+                "- Chequeo enfriador: Inspeccion visual.\n"
+                "- Cambio de filtros de aire/aceite.\n"
+                "- Monitoreo controlador: Prueba carga/descarga.\n" + estado_op
+            ),
+            "condicion": "El equipo funciona bajo parametros estables, nivel de aceite correcto y filtros sin saturacion.",
+            "recomendaciones": "- Plan de mantenimiento: Mantener frecuencia de inspeccion y drenado.\n- Control ambiental: Limpieza preventiva de radiadores.",
+            "proxima_visita": "El proximo servicio recomendado es P2 estimada requerida",
+            "tipo_orden_txt": "Mantencion P1",
+        },
+        "P2": {
+            "actividades": (
+                "- Inspeccion de fugas: Revision visual circuitos aire/aceite.\n"
+                "- Limpieza general del equipo.\n"
+                "- Cambio de lubricante: Drenado y cambio de aceite.\n"
+                "- Chequeo enfriador: Inspeccion visual.\n"
+                "- Cambio de filtros de aire/aceite.\n"
+                "- Monitoreo controlador: Prueba carga/descarga.\n" + estado_op
+            ),
+            "condicion": "El equipo funciona bajo parametros estables. Se detectan enfriadores saturados sin fugas visibles.",
+            "recomendaciones": "- Plan de mantenimiento: Mantener frecuencia de inspeccion.\n- Control ambiental: Limpieza preventiva de radiadores.",
+            "proxima_visita": "El proximo servicio recomendado es P3 estimada requerida",
+            "tipo_orden_txt": "Mantencion P2",
+        },
+        "P3": {
+            "actividades": (
+                "- Inspeccion de fugas: Revision visual circuitos aire/aceite.\n"
+                "- Limpieza profunda de enfriadores y componentes internos.\n"
+                "- Cambio de lubricante completo.\n"
+                "- Cambio de filtros de aire, aceite y separador.\n"
+                "- Engrase de rodamientos motor electrico.\n"
+                "- Revision valvulas de minima y anti-retorno.\n"
+                "- Monitoreo controlador: Prueba carga/descarga.\n" + estado_op
+            ),
+            "condicion": "El equipo en optimas condiciones tras mantencion mayor. Parametros nominales, aceite correcto y filtros nuevos.",
+            "recomendaciones": "- Continuar plan preventivo.\n- Programar proxima mantencion mayor segun horas operacion.",
+            "proxima_visita": "El proximo servicio recomendado es Inspeccion estimada requerida",
+            "tipo_orden_txt": "Mantencion P3",
+        },
+    }
+    tpl = plantillas.get(tipo, plantillas["INSPECCION"])
+    return {"alcance": alcance, **tpl}
+
+# ── DATOS INICIALES CENTINELA ─────────────────────────────────────────────────
+EQUIPOS_INICIALES = [
+    # SULFURO
+    {"tag":"211-GC-001","serie":"API515199","modelo":"GA75","marca":"ATLASCOPCO","subarea":"CHANCADO PRIMARIO","area":"CONMINUCION","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"211-GC-002","serie":"API616532","modelo":"GA75","marca":"ATLASCOPCO","subarea":"CHANCADO PRIMARIO","area":"CONMINUCION","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"318-GC-001","serie":"WUX409578","modelo":"G132","marca":"ATLASCOPCO","subarea":"CHANCADO SECUNDARIO","area":"CONMINUCION","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"318-GC-002","serie":"WUX409516","modelo":"G132","marca":"ATLASCOPCO","subarea":"CHANCADO SECUNDARIO","area":"CONMINUCION","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"318-GC-003","serie":"WUX409537","modelo":"G132","marca":"ATLASCOPCO","subarea":"CHANCADO SECUNDARIO","area":"CONMINUCION","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"318-OSC-001","serie":"---","modelo":"OSC1200","marca":"ATLASCOPCO","subarea":"CHANCADO SECUNDARIO","area":"CONMINUCION","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"344-GC-001","serie":"APIS44785601","modelo":"GA55","marca":"ATLASCOPCO","subarea":"FISEMO","area":"MOLIBDENO","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"346-GC-001","serie":"API624285","modelo":"GA90","marca":"ATLASCOPCO","subarea":"MOLIBDENO","area":"MOLIBDENO","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"346-GC-002","serie":"API624286","modelo":"GA90","marca":"ATLASCOPCO","subarea":"MOLIBDENO","area":"MOLIBDENO","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"LAB-GC-001","serie":"CAI878332","modelo":"GA15FF","marca":"ATLASCOPCO","subarea":"LABORATORIO","area":"LABORATORIO","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"LAB-GC-002","serie":"ITJ182547","modelo":"GA15P","marca":"ATLASCOPCO","subarea":"LABORATORIO","area":"LABORATORIO","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"411-GC-001","serie":"API310344","modelo":"GA30","marca":"ATLASCOPCO","subarea":"FLOCULANTE","area":"FLOCULANTE","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"411-GC-501","serie":"API323529","modelo":"GA30","marca":"ATLASCOPCO","subarea":"FLOCULANTE","area":"FLOCULANTE","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"122-GC-001","serie":"APF135735","modelo":"GA90+","marca":"ATLASCOPCO","subarea":"TALLER DE CAMIONES","area":"TALLER DE CAMIONES","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"122-GC-002","serie":"APF135800","modelo":"GA90+","marca":"ATLASCOPCO","subarea":"TALLER DE CAMIONES","area":"TALLER DE CAMIONES","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"122-GD-002","serie":"API690916","modelo":"CD185","marca":"ATLASCOPCO","subarea":"TALLER DE CAMIONES","area":"TALLER DE CAMIONES","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"335-GC-001","serie":"APF143254","modelo":"GA315","marca":"ATLASCOPCO","subarea":"MOLIENDA","area":"CONMINUCION","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"335-GC-002","serie":"APF143370","modelo":"GA315","marca":"ATLASCOPCO","subarea":"MOLIENDA","area":"CONMINUCION","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"335-GC-003","serie":"APF143685","modelo":"GA315","marca":"ATLASCOPCO","subarea":"MOLIENDA","area":"CONMINUCION","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"335-GD-004","serie":"APF226020","modelo":"CD330+","marca":"ATLASCOPCO","subarea":"MOLIENDA","area":"CONMINUCION","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"324-GC-001","serie":"APF143377","modelo":"GA500","marca":"ATLASCOPCO","subarea":"FLOTACION","area":"FLOTACION","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"324-GC-002","serie":"APF143426","modelo":"GA500","marca":"ATLASCOPCO","subarea":"FLOTACION","area":"FLOTACION","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"CM871A1-1","serie":"CAI721030","modelo":"GA7FF","marca":"ATLASCOPCO","subarea":"OSMOSIS","area":"RO","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"ZE-GC-001","serie":"APF209860","modelo":"ZE2","marca":"ATLASCOPCO","subarea":"OSMOSIS","area":"RO","ubicacion":"SULFURO","estado":"OPERATIVO"},
+    {"tag":"335-GD-001","serie":"API080552","modelo":"BD250","marca":"ATLASCOPCO","subarea":"Molienda","area":"CONMINUCION","ubicacion":"SULFURO","estado":"FUERA DE SERVICIO"},
+    {"tag":"335-GD-002","serie":"API080554","modelo":"BD250","marca":"ATLASCOPCO","subarea":"Molienda","area":"CONMINUCION","ubicacion":"SULFURO","estado":"FUERA DE SERVICIO"},
+    {"tag":"335-GD-601","serie":"APF193048","modelo":"BD550","marca":"ATLASCOPCO","subarea":"Molienda","area":"CONMINUCION","ubicacion":"SULFURO","estado":"FUERA DE SERVICIO"},
+    {"tag":"346-GD-001","serie":"APF207186","modelo":"CD150+","marca":"ATLASCOPCO","subarea":"Molibdeno","area":"Flotacion molibdeno floculantes Ro","ubicacion":"SULFURO","estado":"FUERA DE SERVICIO"},
+    {"tag":"122-GC-003","serie":"APF135734","modelo":"GA110+","marca":"ATLASCOPCO","subarea":"Taller de camiones","area":"TALLER DE CAMIONES","ubicacion":"SULFURO","estado":"FUERA DE SERVICIO"},
+    {"tag":"122-GD-001","serie":"API690915","modelo":"CD300","marca":"ATLASCOPCO","subarea":"Taller de camiones","area":"TALLER DE CAMIONES","ubicacion":"SULFURO","estado":"FUERA DE SERVICIO"},
+    {"tag":"318-GD-001","serie":"UTF123UQ1","modelo":"BD630","marca":"ATLASCOPCO","subarea":"Chancado Secundario","area":"CONMINUCION","ubicacion":"SULFURO","estado":"FUERA DE SERVICIO"},
+    # OXE
+    {"tag":"3210-C2-1001","serie":"API623258","modelo":"GA90","marca":"ATLASCOPCO","subarea":"Chancado Primario","area":"OXE","ubicacion":"OXE","estado":"OPERATIVO"},
+    {"tag":"3210-C1-1001","serie":"API623260","modelo":"GA90","marca":"ATLASCOPCO","subarea":"Chancado Primario","area":"OXE","ubicacion":"OXE","estado":"OPERATIVO"},
+    {"tag":"3230-C3-2001","serie":"API543531","modelo":"GA45","marca":"ATLASCOPCO","subarea":"Harnero Secundario","area":"OXE","ubicacion":"OXE","estado":"OPERATIVO"},
+    {"tag":"3230-C4-3001","serie":"API543590","modelo":"GA30+","marca":"ATLASCOPCO","subarea":"Chancado Secundario","area":"OXE","ubicacion":"OXE","estado":"OPERATIVO"},
+    {"tag":"3240-C5-4001","serie":"API623259","modelo":"GA90","marca":"ATLASCOPCO","subarea":"Harnero Terciario","area":"OXE","ubicacion":"OXE","estado":"OPERATIVO"},
+    {"tag":"3240-C6-5001","serie":"API543530","modelo":"GA45","marca":"ATLASCOPCO","subarea":"Chancado Terciario","area":"OXE","ubicacion":"OXE","estado":"OPERATIVO"},
+    {"tag":"3240-C7-6001","serie":"API329314","modelo":"GA15+","marca":"ATLASCOPCO","subarea":"Silo Refino","area":"OXE","ubicacion":"OXE","estado":"OPERATIVO"},
+    {"tag":"3300-C7-600","serie":"CAI884389","modelo":"GX4","marca":"ATLASCOPCO","subarea":"Aglomerado","area":"OXE","ubicacion":"OXE","estado":"OPERATIVO"},
+    # OXIDO
+    {"tag":"200-GC-001","serie":"API629823","modelo":"GA55","marca":"ATLASCOPCO","subarea":"Chancado Primario","area":"AREA SECA","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"200-GC-002","serie":"API629822","modelo":"GA55","marca":"ATLASCOPCO","subarea":"Chancado Primario","area":"AREA SECA","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"220-GC-001","serie":"API629825","modelo":"GA55","marca":"ATLASCOPCO","subarea":"Chancado Secundario","area":"AREA SECA","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"220-GC-002","serie":"API629834","modelo":"GA55","marca":"ATLASCOPCO","subarea":"Chancado Secundario","area":"AREA SECA","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"220-GC-003","serie":"API629826","modelo":"GA90+","marca":"ATLASCOPCO","subarea":"Chancado Secundario","area":"AREA SECA","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"220-GD-001","serie":"APF235378","modelo":"CD630","marca":"ATLASCOPCO","subarea":"Chancado Secundario","area":"AREA SECA","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"AGL-GC-001","serie":"API333775","modelo":"GA30","marca":"ATLASCOPCO","subarea":"Aglomerado","area":"AREA SECA","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"AGL-GC-002","serie":"API334806","modelo":"GA30","marca":"ATLASCOPCO","subarea":"Aglomerado","area":"AREA SECA","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"OSM-GC-001","serie":"1148","modelo":"SM15","marca":"KAESER","subarea":"Osmosis","area":"OSMOSIS","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"OSM-GC-004","serie":"ITJ242366","modelo":"G11P","marca":"ATLASCOPCO","subarea":"Osmosis","area":"OSMOSIS","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"TCN-GC-002","serie":"APF227050","modelo":"GA90+","marca":"ATLASCOPCO","subarea":"Taller Camiones Norte","area":"TALLER DE CAMIONES","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"MNE-GD-001","serie":"API249242","modelo":"CD35","marca":"ATLASCOPCO","subarea":"Martillo Neumatico SX","area":"AREA HUMEDA","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"600-DP-002","serie":"ITJ242345","modelo":"G11","marca":"ATLASCOPCO","subarea":"Martillo Neumatico SX","area":"AREA HUMEDA","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"CAL-GC-001","serie":"ITJ242285","modelo":"GA18","marca":"ATLASCOPCO","subarea":"Calentadores SX","area":"AREA HUMEDA","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"ENZ-GC-001","serie":"ITJ242306","modelo":"GA15","marca":"ATLASCOPCO","subarea":"Enzunchadora SX","area":"AREA HUMEDA","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"MDC-GC-001","serie":"ITJ242307","modelo":"GA18","marca":"ATLASCOPCO","subarea":"Maquina Despegadora SX","area":"AREA HUMEDA","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"POST-GC-001","serie":"API587024","modelo":"GA37","marca":"ATLASCOPCO","subarea":"Post-Decantador SX","area":"AREA HUMEDA","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"LAB-GC-004","serie":"ITR1354539","modelo":"LF3FF","marca":"ATLASCOPCO","subarea":"Laboratorio","area":"LABORATORIO","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"LAB-GC-003","serie":"ITJ242308","modelo":"GA18P","marca":"ATLASCOPCO","subarea":"Laboratorio","area":"LABORATORIO","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"DES-GC-002","serie":"1118-6854188","modelo":"BSD65","marca":"KAESER","subarea":"Descarga de Acido","area":"DESCARGA DE ACIDO","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"DES-GC-001","serie":"1120-6867842","modelo":"BSD65","marca":"KAESER","subarea":"Descarga de Acido","area":"DESCARGA DE ACIDO","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"LAB-GC-006","serie":"AII661966","modelo":"GX18","marca":"ATLASCOPCO","subarea":"Laboratorio","area":"LABORATORIO","ubicacion":"OXIDO","estado":"FUERA DE SERVICIO"},
+    {"tag":"LAB-GC-005","serie":"---","modelo":"FX1AD","marca":"ATLASCOPCO","subarea":"Laboratorio","area":"LABORATORIO","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"TCN-GC-001","serie":"349006/0334","modelo":"RA-086","marca":"COMP AIR","subarea":"Taller Camiones Norte","area":"TALLER DE CAMIONES","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    {"tag":"SOPLADOR-1","serie":"APF155559","modelo":"ZS75+VSD","marca":"ATLASCOPCO","subarea":"SX","area":"Area humeda hidro","ubicacion":"OXIDO","estado":"OPERATIVO"},
+    # MUELLE
+    {"tag":"621-GC-001","serie":"APFS99645701","modelo":"GR200","marca":"ATLASCOPCO","subarea":"Muelle","area":"MUELLE","ubicacion":"MUELLE","estado":"OPERATIVO"},
+    {"tag":"621-GC-003","serie":"APF143505","modelo":"GA355","marca":"ATLASCOPCO","subarea":"Muelle","area":"MUELLE","ubicacion":"MUELLE","estado":"OPERATIVO"},
+    {"tag":"621-GC-004","serie":"APFS99645702","modelo":"GA355","marca":"ATLASCOPCO","subarea":"Muelle","area":"MUELLE","ubicacion":"MUELLE","estado":"OPERATIVO"},
+    {"tag":"621-GC-002","serie":"APFS99645702","modelo":"GR200","marca":"ATLASCOPCO","subarea":"Muelle","area":"MUELLE","ubicacion":"MUELLE","estado":"OPERATIVO"},
+    {"tag":"OSM-GC-002","serie":"3019853","modelo":"2475","marca":"INGERSOLLRAND","subarea":"Osmosis","area":"OSMOSIS","ubicacion":"MUELLE","estado":"OPERATIVO"},
+    {"tag":"OSM-GC-005","serie":"CAI721652","modelo":"GA5FF","marca":"ATLASCOPCO","subarea":"Osmosis","area":"OSMOSIS","ubicacion":"MUELLE","estado":"OPERATIVO"},
+    {"tag":"OSM-GC-003","serie":"3019858","modelo":"2475","marca":"INGERSOLL RAND","subarea":"Osmosis","area":"OSMOSIS","ubicacion":"MUELLE","estado":"FUERA DE SERVICIO"},
+    {"tag":"641-DC-003M","serie":"1045","modelo":"CSV150","marca":"KAESER","subarea":"Muelle","area":"MUELLE","ubicacion":"MUELLE","estado":"FUERA DE SERVICIO"},
+    {"tag":"621-GC-001B","serie":"APFS99645701","modelo":"GR200","marca":"ATLASCOPCO","subarea":"Muelle","area":"MUELLE","ubicacion":"MUELLE","estado":"OPERATIVO"},
 ]
 
-equipos_db = {e[2]: [e[1], e[0], e[3], e[6], e[7]] for e in equipos_lista}
+def inicializar_equipos():
+    """Carga equipos iniciales si la tabla está vacía."""
+    try:
+        res = supabase.table("equipos").select("id").limit(1).execute()
+        if not res.data:
+            for eq in EQUIPOS_INICIALES:
+                supabase.table("equipos").upsert(eq, on_conflict="tag").execute()
+    except Exception as e:
+        logger.error(f"Error inicializando equipos: {e}")
 
-def get_plantilla(tipo, modelo, tag, subarea, area, p_carga, p_descarga, temp_salida):
-    verbo = "inspeccion" if tipo == "INSPECCION" else ("mantencion mayor" if tipo == "P3" else "mantencion")
-    alcance = (f"Se realizo {verbo} a equipo compresor {modelo} con identificacion TAG {tag} "
-               f"de {area}, {subarea}, conforme a procedimientos internos y buenas practicas de mantenimiento.")
-    estado_op = (f"- Estado operacional: Verificacion de parametros de operacion "
-                 f"(Presion de carga: {p_carga} bar / descarga: {p_descarga} bar) "
-                 f"y temperatura de salida del elemento ({temp_salida} C).")
-    if tipo == "INSPECCION":
-        act = ("- Inspeccion de fugas: Revision visual de circuitos de aire y aceite.\n"
-               "- Nivel de lubricante: Chequeo del nivel de aceite por medio del visor.\n"
-               "- Revision enfriador: Inspeccion visual en enfriador de aire/aceite.\n"
-               "- Revision general: Se verifica estado de filtros de aire, valvula de corte y lineas de aire.\n"
-               "- Monitoreo de controlador: Validacion de parametros de operacion, realizando prueba en carga/descarga del equipo.\n"
-               f"{estado_op}\n- Purga condensado: Drenado de condensado del equipo.")
-        cond = "El equipo se encuentra funcionando bajo parametros estables, con nivel de aceite dentro del rango establecido y con filtros sin saturacion."
-        rec  = "- Nota tecnica: El equipo supera las horas recomendadas por fabrica para mantenimiento mayor, se recomienda enviar a overhaul o reemplazar por equipo nuevo."
-        pv   = "El proximo servicio recomendado es Inspeccion estimada requerida"
-        tot  = "INSPECCION"
-    elif tipo == "P1":
-        act = ("- Inspeccion de fugas: Revision visual de circuitos de aire/aceite.\n"
-               "- Limpieza general: Limpieza general de equipo compresor.\n"
-               "- Verificacion de lubricante: Revision por visor de nivel optimo.\n"
-               "- Chequeo enfriador: Inspeccion visual en enfriador de aire/aceite.\n"
-               "- Cambio filtros: Cambio de filtros de aire/aceite.\n"
-               "- Monitoreo de controlador: Validacion de parametros de operacion, realizando prueba en carga/descarga del equipo.\n"
-               f"{estado_op}")
-        cond = "El equipo se encuentra funcionando bajo parametros estables, nivel de aceite dentro del rango establecido y con filtros sin saturacion."
-        rec  = ("- Plan de mantenimiento: Mantener frecuencia de inspeccion y drenado de condensados segun plan preventivo vigente.\n"
-                "- Control ambiental: Considerar limpieza preventiva del entorno y radiadores.")
-        pv   = "El proximo servicio recomendado es P2 estimada requerida"
-        tot  = "Mantencion P1"
-    elif tipo == "P2":
-        act = ("- Inspeccion de fugas: Revision visual de circuitos de aire/aceite.\n"
-               "- Limpieza general: Limpieza general de equipo compresor.\n"
-               "- Cambio de lubricante: Se realiza drenado con cambio de aceite y revision por visor.\n"
-               "- Chequeo enfriador: Inspeccion visual en enfriador de aire/aceite.\n"
-               "- Cambio filtros: Cambio de filtros de aire/aceite.\n"
-               "- Monitoreo de controlador: Validacion de parametros de operacion, realizando prueba en carga/descarga del equipo.\n"
-               f"{estado_op}")
-        cond = ("El equipo se encuentra funcionando bajo parametros estables, nivel de aceite dentro del rango establecido y con filtros sin saturacion.\n"
-                "Se detectan enfriadores saturados por contaminacion, pero sin fugas visibles.")
-        rec  = ("- Plan de mantenimiento: Mantener frecuencia de inspeccion y drenado de condensados segun plan preventivo vigente.\n"
-                "- Control ambiental: Considerar limpieza preventiva del entorno y radiadores.")
-        pv   = "El proximo servicio recomendado es P3 estimada requerida"
-        tot  = "Mantencion P2"
-    else:
-        act = ("- Inspeccion de fugas: Revision visual de circuitos de aire/aceite.\n"
-               "- Limpieza profunda: Limpieza profunda de enfriadores y componentes internos.\n"
-               "- Cambio de lubricante: Drenado completo con cambio de aceite y revision por visor.\n"
-               "- Cambio filtros: Cambio de filtros de aire, aceite y separador.\n"
-               "- Engrase rodamientos: Engrase de rodamientos del motor electrico.\n"
-               "- Revision valvulas: Inspeccion y limpieza de valvula de minima y anti-retorno.\n"
-               "- Monitoreo de controlador: Validacion de parametros de operacion, realizando prueba en carga/descarga del equipo.\n"
-               f"{estado_op}")
-        cond = "El equipo se encuentra en optimas condiciones tras mantencion mayor. Parametros en rango nominal, nivel de aceite correcto y filtros nuevos instalados."
-        rec  = ("- Plan de mantenimiento: Continuar con plan de mantenimiento preventivo.\n"
-                "- Proxima intervencion: Programar proxima mantencion mayor segun horas de operacion del equipo.")
-        pv   = "El proximo servicio recomendado es Inspeccion estimada requerida"
-        tot  = "Mantencion P3"
-    return {"alcance": alcance, "actividades": act, "condicion": cond,
-            "recomendaciones": rec, "proxima_visita": pv, "tipo_orden_txt": tot}
+inicializar_equipos()
 
-# ── UI ──
-st.title("Atlas Copco Tracker - Spence")
-tab0, tab1, tab2, tab3 = st.tabs(["Equipos", "Generar Informe", "Historial", "Informes Guardados"])
+# ── UI ────────────────────────────────────────────────────────────────────────
+st.markdown("<h1 style='font-family:Rajdhani,sans-serif;font-size:2.4rem;color:#e2e8f0;'>🛡️ CENTINELA</h1><p style='color:#718096;margin-top:-10px;'>Sistema de Gestión de Equipos — Minera Spence</p>", unsafe_allow_html=True)
 
-with tab0:
-    st.subheader("Panel de Equipos - Centinela")
-    total     = len(equipos_lista)
-    operativo = sum(1 for e in equipos_lista if e[4] == "OPERATIVO")
-    fuera     = total - operativo
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Total Equipos", total)
-    m2.metric("Operativos", operativo, delta=f"{round(operativo/total*100)}%")
-    m3.metric("Fuera de Servicio", fuera, delta=f"-{fuera}", delta_color="inverse")
+tab1, tab2, tab3, tab4 = st.tabs(["🏭 Equipos", "📋 Generar Informe", "📊 Historial", "📁 Informes"])
+
+# ════════════════════════════════════════════════
+# TAB 1 — EQUIPOS
+# ════════════════════════════════════════════════
+with tab1:
+    equipos = cargar_equipos()
+
+    # Métricas resumen
+    total   = len(equipos)
+    op      = sum(1 for e in equipos if e.get("estado") == "OPERATIVO")
+    fs      = total - op
+    locs    = sorted(set(e.get("ubicacion","") for e in equipos if e.get("ubicacion")))
+
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#90cdf4'>{total}</div><div class='metric-l'>Total Equipos</div></div>", unsafe_allow_html=True)
+    with m2:
+        st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#48bb78'>{op}</div><div class='metric-l'>Operativos</div></div>", unsafe_allow_html=True)
+    with m3:
+        st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#f56565'>{fs}</div><div class='metric-l'>Fuera de Servicio</div></div>", unsafe_allow_html=True)
+    with m4:
+        st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#f6ad55'>{len(locs)}</div><div class='metric-l'>Ubicaciones</div></div>", unsafe_allow_html=True)
+
     st.divider()
 
-    f1, f2, f3 = st.columns(3)
-    with f1: filtro_ubi    = st.selectbox("Ubicacion", ["Todas"] + sorted(set(e[7] for e in equipos_lista if e[7])))
-    with f2: filtro_area   = st.selectbox("Area",      ["Todas"] + sorted(set(e[6] for e in equipos_lista if e[6])))
-    with f3: filtro_estado = st.selectbox("Estado",    ["Todos", "OPERATIVO", "FUERA DE SERVICIO"])
+    # Filtros
+    cf1, cf2, cf3, cf4 = st.columns(4)
+    with cf1: f_loc   = st.selectbox("Ubicación", ["Todas"] + locs, key="f_loc")
+    with cf2: f_est   = st.selectbox("Estado", ["Todos", "OPERATIVO", "FUERA DE SERVICIO"], key="f_est")
+    with cf3: f_marca = st.selectbox("Marca", ["Todas"] + sorted(set(e.get("marca","") for e in equipos)), key="f_marca")
+    with cf4: f_bus   = st.text_input("Buscar TAG / Modelo", key="f_bus")
 
-    df_eq = pd.DataFrame(equipos_lista, columns=["Serie","Modelo","TAG","Subarea","Estado","Marca","Area","Ubicacion"])
-    if filtro_ubi    != "Todas": df_eq = df_eq[df_eq["Ubicacion"] == filtro_ubi]
-    if filtro_area   != "Todas": df_eq = df_eq[df_eq["Area"]      == filtro_area]
-    if filtro_estado != "Todos": df_eq = df_eq[df_eq["Estado"]    == filtro_estado]
+    # Aplicar filtros
+    ef = equipos
+    if f_loc   != "Todas":  ef = [e for e in ef if e.get("ubicacion") == f_loc]
+    if f_est   != "Todos":  ef = [e for e in ef if e.get("estado") == f_est]
+    if f_marca != "Todas":  ef = [e for e in ef if e.get("marca") == f_marca]
+    if f_bus:               ef = [e for e in ef if f_bus.upper() in e.get("tag","").upper() or f_bus.upper() in e.get("modelo","").upper()]
 
-    def color_estado(val):
-        if val == "OPERATIVO":        return "background-color:#d4edda;color:#155724"
-        if val == "FUERA DE SERVICIO":return "background-color:#f8d7da;color:#721c24"
-        return ""
+    st.caption(f"Mostrando {len(ef)} equipos")
 
-    st.dataframe(df_eq.style.applymap(color_estado, subset=["Estado"]),
-                 use_container_width=True, hide_index=True, height=500)
-    st.caption(f"Mostrando {len(df_eq)} de {total} equipos")
+    # Lista + ficha lateral
+    col_lista, col_ficha = st.columns([1, 2])
 
-with tab1:
-    col_tag, col_tipo = st.columns(2)
-    with col_tag:  tag_sel   = st.selectbox("TAG del equipo", list(equipos_db.keys()))
-    with col_tipo: tipo_mant = st.selectbox("Tipo de Mantencion", ["INSPECCION","P1","P2","P3"])
+    with col_lista:
+        st.markdown("#### Lista de Equipos")
+        if "equipo_sel" not in st.session_state:
+            st.session_state["equipo_sel"] = None
 
-    mod_aut, ser_aut, sub_aut, area_aut, ubi_aut = equipos_db[tag_sel]
-    eq_info = next((e for e in equipos_lista if e[2] == tag_sel), None)
-    if eq_info:
-        estado_eq = eq_info[4]
-        color = "green" if estado_eq == "OPERATIVO" else "red"
-        st.markdown(f"**Equipo:** {mod_aut} | **Serie:** {ser_aut} | **Subarea:** {sub_aut} | **Area:** {area_aut} | Estado: :{color}[{estado_eq}]")
+        for eq in ef:
+            es_op    = eq.get("estado") == "OPERATIVO"
+            cls      = "operativo" if es_op else "fuera"
+            badge_cl = "badge-op" if es_op else "badge-fs"
+            badge_tx = "OPERATIVO" if es_op else "FUERA DE SERVICIO"
+
+            st.markdown(f"""
+            <div class='equipo-card {cls}'>
+                <div class='tag-label'>{eq['tag']}</div>
+                <div class='modelo-label'>{eq.get('modelo','')} · {eq.get('subarea','')}</div>
+                <span class='estado-badge {badge_cl}'>{badge_tx}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if st.button(f"Ver ficha", key=f"btn_{eq['tag']}"):
+                st.session_state["equipo_sel"] = eq["tag"]
+
+    with col_ficha:
+        sel_tag = st.session_state.get("equipo_sel")
+        if sel_tag:
+            eq_data = next((e for e in equipos if e["tag"] == sel_tag), None)
+            if eq_data:
+                es_op    = eq_data.get("estado") == "OPERATIVO"
+                badge_cl = "badge-op" if es_op else "badge-fs"
+                badge_tx = "OPERATIVO" if es_op else "FUERA DE SERVICIO"
+
+                st.markdown(f"""
+                <div class='ficha-header'>
+                    <div style='display:flex;justify-content:space-between;align-items:flex-start;'>
+                        <div>
+                            <div class='ficha-tag'>{eq_data['tag']}</div>
+                            <div class='ficha-modelo'>{eq_data.get('marca','')} · {eq_data.get('modelo','')}</div>
+                        </div>
+                        <span class='estado-badge {badge_cl}'>{badge_tx}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                d1, d2, d3 = st.columns(3)
+                with d1:
+                    st.markdown(f"<div class='dato-box'><div class='dato-label'>Serie</div><div class='dato-valor'>{eq_data.get('serie','—')}</div></div>", unsafe_allow_html=True)
+                with d2:
+                    st.markdown(f"<div class='dato-box'><div class='dato-label'>Área</div><div class='dato-valor'>{eq_data.get('area','—')}</div></div>", unsafe_allow_html=True)
+                with d3:
+                    st.markdown(f"<div class='dato-box'><div class='dato-label'>Ubicación</div><div class='dato-valor'>{eq_data.get('ubicacion','—')}</div></div>", unsafe_allow_html=True)
+
+                st.markdown(f"<div style='margin-top:0.6rem'><div class='dato-box'><div class='dato-label'>Subárea</div><div class='dato-valor' style='font-size:1rem'>{eq_data.get('subarea','—')}</div></div></div>", unsafe_allow_html=True)
+
+                # Último mantenimiento
+                try:
+                    ult_res = supabase.table("historial").select("fecha,tipo,horas_marcha").eq("tag", sel_tag).order("creado_en", desc=True).limit(1).execute()
+                    ult = ult_res.data[0] if ult_res.data else None
+                except:
+                    ult = None
+
+                if ult:
+                    st.markdown(f"""
+                    <div style='margin-top:0.6rem;background:#1a1f2e;border-radius:10px;padding:1rem;border:1px solid #2d3748;'>
+                        <div class='dato-label'>Ultimo Mantenimiento</div>
+                        <div style='display:flex;gap:1rem;margin-top:0.5rem;'>
+                            <div><span style='color:#718096;font-size:0.8rem'>Fecha</span><br><span style='color:#e2e8f0;font-weight:600'>{ult['fecha']}</span></div>
+                            <div><span style='color:#718096;font-size:0.8rem'>Tipo</span><br><span style='color:#90cdf4;font-weight:600'>{ult['tipo']}</span></div>
+                            <div><span style='color:#718096;font-size:0.8rem'>Horas Marcha</span><br><span style='color:#f6ad55;font-weight:600'>{ult['horas_marcha']} hrs</span></div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # Componentes
+                st.markdown("#### 🔩 Componentes / Repuestos")
+                comps = cargar_componentes(sel_tag)
+                if comps:
+                    for c in comps:
+                        cc1, cc2, cc3 = st.columns([2, 3, 1])
+                        with cc1: st.markdown(f"<div class='comp-tipo'>{c.get('tipo','')}</div>", unsafe_allow_html=True)
+                        with cc2: st.markdown(f"<div class='comp-parte'>{c.get('numero_parte','—')}</div><div style='font-size:0.75rem;color:#718096'>{c.get('descripcion','')}</div>", unsafe_allow_html=True)
+                        with cc3:
+                            if st.button("🗑", key=f"del_c_{c['id']}"):
+                                eliminar_componente(c["id"])
+                                st.rerun()
+                else:
+                    st.caption("Sin componentes registrados.")
+
+                # Agregar componente
+                with st.expander("➕ Agregar componente"):
+                    nc1, nc2 = st.columns(2)
+                    with nc1:
+                        n_tipo = st.selectbox("Tipo", ["Filtro de aire","Filtro de aceite","Filtro separador","Aceite (referencia)","Kit de mantenimiento","Otro"], key=f"nt_{sel_tag}")
+                    with nc2:
+                        n_parte = st.text_input("Numero de parte", key=f"np_{sel_tag}")
+                    n_desc = st.text_input("Descripcion (opcional)", key=f"nd_{sel_tag}")
+                    if st.button("Guardar componente", key=f"gc_{sel_tag}"):
+                        if n_parte:
+                            guardar_componente({"equipo_tag": sel_tag, "tipo": n_tipo, "numero_parte": n_parte, "descripcion": n_desc})
+                            st.success("Componente guardado.")
+                            st.rerun()
+                        else:
+                            st.warning("Ingresa el numero de parte.")
+
+                # Editar equipo
+                with st.expander("✏️ Editar datos del equipo"):
+                    ec1, ec2 = st.columns(2)
+                    with ec1:
+                        e_modelo  = st.text_input("Modelo",    value=eq_data.get("modelo",""),   key=f"em_{sel_tag}")
+                        e_serie   = st.text_input("Serie",     value=eq_data.get("serie",""),    key=f"es_{sel_tag}")
+                        e_marca   = st.text_input("Marca",     value=eq_data.get("marca",""),    key=f"emk_{sel_tag}")
+                    with ec2:
+                        e_subarea = st.text_input("Subarea",   value=eq_data.get("subarea",""),  key=f"esa_{sel_tag}")
+                        e_area    = st.text_input("Area",      value=eq_data.get("area",""),     key=f"ea_{sel_tag}")
+                        e_ubic    = st.text_input("Ubicacion", value=eq_data.get("ubicacion",""),key=f"eu_{sel_tag}")
+                    e_estado = st.selectbox("Estado", ["OPERATIVO","FUERA DE SERVICIO"],
+                                            index=0 if eq_data.get("estado")=="OPERATIVO" else 1,
+                                            key=f"ee_{sel_tag}")
+                    if st.button("Guardar cambios", key=f"save_{sel_tag}"):
+                        upsert_equipo({
+                            "tag": sel_tag, "modelo": e_modelo, "serie": e_serie, "marca": e_marca,
+                            "subarea": e_subarea, "area": e_area, "ubicacion": e_ubic, "estado": e_estado,
+                            "actualizado_en": datetime.now().isoformat()
+                        })
+                        st.success("Equipo actualizado.")
+                        st.rerun()
+        else:
+            st.info("Selecciona un equipo de la lista para ver su ficha.")
+
+# ════════════════════════════════════════════════
+# TAB 2 — GENERAR INFORME
+# ════════════════════════════════════════════════
+with tab2:
+    equipos_list = cargar_equipos()
+    tags_list    = [e["tag"] for e in equipos_list]
+
+    ct1, ct2 = st.columns(2)
+    with ct1: tag_sel   = st.selectbox("TAG del equipo", tags_list, key="inf_tag")
+    with ct2: tipo_mant = st.selectbox("Tipo de Mantencion", ["INSPECCION","P1","P2","P3"])
+
+    eq_inf = next((e for e in equipos_list if e["tag"] == tag_sel), {})
+    mod_aut  = eq_inf.get("modelo","")
+    ser_aut  = eq_inf.get("serie","")
+    loc_aut  = eq_inf.get("subarea","")
+    area_aut = eq_inf.get("area","")
+    st.info(f"Equipo: {mod_aut} | Serie: {ser_aut} | Subarea: {loc_aut} | Area: {area_aut}")
 
     try:
         ur = supabase.table("historial").select("*").eq("tag", tag_sel).order("creado_en", desc=True).limit(1).execute()
-        ultimo = ur.data[0] if ur.data else None
-    except: ultimo = None
+        ult_inf = ur.data[0] if ur.data else None
+    except:
+        ult_inf = None
 
-    h_sug       = int(ultimo["horas_marcha"]) if ultimo else 0
-    h_sug_carga = int(ultimo["horas_carga"])  if ultimo else 0
-    if ultimo: st.caption(f"Ultimo registro: {ultimo['fecha']} — {ultimo['tipo']} — {h_sug} hrs marcha")
+    h_sug   = int(ult_inf["horas_marcha"]) if ult_inf else 0
+    hc_sug  = int(ult_inf["horas_carga"])  if ult_inf else 0
+    if ult_inf:
+        st.caption(f"Ultimo registro: {ult_inf['fecha']} — {ult_inf['tipo']} — {h_sug} hrs marcha")
+
     st.divider()
-
-    with st.form("editor_informe"):
+    with st.form("form_informe"):
         st.subheader("Datos Generales")
-        c1, c2 = st.columns(2)
-        with c1:
-            fecha_sel    = st.date_input("Fecha de atencion", datetime.now())
-            tec1         = st.text_input("Tecnico 1 (Lider)", st.secrets.get("tec1_default","Ignacio Morales"))
-        with c2:
-            cliente_cont = st.text_input("Contacto Cliente",  st.secrets.get("contacto_default","Pamela Tapia"))
-            tec2         = st.text_input("Tecnico 2",         st.secrets.get("tec2_default","Emian Sanchez"))
+        fi1, fi2 = st.columns(2)
+        with fi1:
+            fecha_sel    = st.date_input("Fecha", datetime.now())
+            tec1         = st.text_input("Tecnico 1", st.secrets.get("tec1_default","Ignacio Morales"))
+        with fi2:
+            cliente_cont = st.text_input("Contacto Cliente", st.secrets.get("contacto_default","Pamela Tapia"))
+            tec2         = st.text_input("Tecnico 2", st.secrets.get("tec2_default","Emian Sanchez"))
 
-        st.subheader("Horas del Equipo")
-        ch1, ch2 = st.columns(2)
-        with ch1: h_marcha = st.number_input("Horas Totales Marcha", value=h_sug, step=1)
-        with ch2: h_carga  = st.number_input("Horas Carga",          value=h_sug_carga, step=1)
+        st.subheader("Horas")
+        fh1, fh2 = st.columns(2)
+        with fh1: h_marcha = st.number_input("Horas Marcha", value=h_sug, step=1)
+        with fh2: h_carga  = st.number_input("Horas Carga",  value=hc_sug, step=1)
 
-        st.subheader("Parametros Operacionales")
-        cp1, cp2, cp3 = st.columns(3)
-        with cp1: v_p_carga    = st.text_input("Presion de Carga (bar)", "6.4")
-        with cp2: v_p_descarga = st.text_input("Presion de Descarga (bar)", "6.8")
-        with cp3: v_t_salida   = st.text_input("Temp. Salida Elemento (C)", "80")
+        st.subheader("Parametros")
+        fp1, fp2, fp3 = st.columns(3)
+        with fp1: v_p_carga    = st.text_input("Presion Carga (bar)", "6.4")
+        with fp2: v_p_descarga = st.text_input("Presion Descarga (bar)", "6.8")
+        with fp3: v_t_salida   = st.text_input("Temp. Salida (C)", "80")
 
         st.subheader("Contenido del Informe")
-        st.caption("Pre-llenado automatico segun TAG y tipo.")
-        tpl = get_plantilla(tipo_mant, mod_aut, tag_sel, sub_aut, area_aut, v_p_carga, v_p_descarga, v_t_salida)
-        alcance_manual     = st.text_area("Alcance",         value=tpl["alcance"],         height=80)
-        actividades_manual = st.text_area("Actividades",     value=tpl["actividades"],     height=230)
-        condicion_manual   = st.text_area("Condicion Final", value=tpl["condicion"],       height=100)
-        rec_manual         = st.text_area("Recomendaciones", value=tpl["recomendaciones"], height=100)
+        tpl = get_plantilla(tipo_mant, mod_aut, tag_sel, loc_aut, area_aut, v_p_carga, v_p_descarga, v_t_salida)
+        alcance_m     = st.text_area("Alcance",        value=tpl["alcance"],         height=70)
+        actividades_m = st.text_area("Actividades",    value=tpl["actividades"],     height=220)
+        condicion_m   = st.text_area("Condicion Final",value=tpl["condicion"],       height=90)
+        rec_m         = st.text_area("Recomendaciones",value=tpl["recomendaciones"], height=90)
         st.divider()
         enviar = st.form_submit_button("GUARDAR Y GENERAR REPORTE", use_container_width=True)
 
     if enviar:
         TEMPLATE_PATH = "InformeInspección.docx"
         if not os.path.exists(TEMPLATE_PATH):
-            st.error(f"Template Word no encontrado: '{TEMPLATE_PATH}'"); st.stop()
+            st.error(f"Template Word no encontrado: '{TEMPLATE_PATH}'")
+            st.stop()
         try:
             doc   = DocxTemplate(TEMPLATE_PATH)
             meses = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"]
             fecha_txt = f"{fecha_sel.day} de {meses[fecha_sel.month-1]} de {fecha_sel.year}"
             contexto = {
                 "fecha": fecha_txt, "cliente_contact": cliente_cont,
-                "alcanze_intervencion": alcance_manual, "operaciones_dinamicas": actividades_manual,
+                "alcanze_intervencion": alcance_m, "operaciones_dinamicas": actividades_m,
                 "p_carga": v_p_carga, "p_descarga": v_p_descarga, "temp_salida": v_t_salida,
-                "estado_entrega": condicion_manual, "recomendaciones": rec_manual,
-                "proxima_visita": tpl["proxima_visita"], "tecnico_1": tec1, "tecnico_2": tec2,
+                "estado_entrega": condicion_m, "recomendaciones": rec_m,
+                "proxima_visita": tpl["proxima_visita"],
+                "tecnico_1": tec1, "tecnico_2": tec2,
                 "act_1": "Mantenimiento", "h_1": "8", "h_2": "8",
                 "equipo_modelo": mod_aut, "serie": ser_aut,
                 "horas_marcha": f"{h_marcha} Hrs.", "tipo_orden": tpl["tipo_orden_txt"],
                 "horas_totales_despues": h_marcha, "horas_carga_despues": h_carga, "tag": tag_sel,
             }
             doc.render(contexto)
-            output = io.BytesIO(); doc.save(output)
-            archivo_bytes  = output.getvalue()
-            nombre_archivo = f"Informe_{tipo_mant}_{tag_sel}_{fecha_sel}.docx"
-            with st.spinner("Guardando en base de datos..."):
+            output = io.BytesIO()
+            doc.save(output)
+            ab = output.getvalue()
+            nf = f"Informe_{tipo_mant}_{tag_sel}_{fecha_sel}.docx"
+
+            with st.spinner("Guardando..."):
                 rid = guardar_registro({
                     "fecha": str(fecha_sel), "tag": tag_sel, "tipo": tipo_mant,
                     "horas_marcha": h_marcha, "horas_carga": h_carga,
                     "tecnico_1": tec1, "tecnico_2": tec2, "contacto": cliente_cont,
                     "p_carga": v_p_carga, "p_descarga": v_p_descarga, "temp_salida": v_t_salida,
-                    "alcance": alcance_manual, "actividades": actividades_manual,
-                    "condicion": condicion_manual, "recomendaciones": rec_manual,
+                    "alcance": alcance_m, "actividades": actividades_m,
+                    "condicion": condicion_m, "recomendaciones": rec_m,
                 })
-                if rid: guardar_informe(rid, nombre_archivo, archivo_bytes)
+                if rid: guardar_informe_storage(rid, nf, ab)
+
             st.success(f"Guardado — {tpl['tipo_orden_txt']} | {tag_sel} | {fecha_txt}")
-            st.download_button("DESCARGAR REPORTE", archivo_bytes, nombre_archivo,
+            st.download_button("DESCARGAR REPORTE", ab, nf,
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 use_container_width=True)
         except Exception as e:
-            st.error(f"Error al procesar: {e}"); logger.error(f"Error: {e}")
+            st.error(f"Error: {e}")
 
-with tab2:
+# ════════════════════════════════════════════════
+# TAB 3 — HISTORIAL
+# ════════════════════════════════════════════════
+with tab3:
     st.subheader("Historial de Mantenciones")
-    fc1, fc2, fc3 = st.columns(3)
-    with fc1: filtro_tag  = st.selectbox("Filtrar por TAG",  ["Todos"] + list(equipos_db.keys()), key="f_tag")
-    with fc2: filtro_tipo = st.selectbox("Filtrar por Tipo", ["Todos","INSPECCION","P1","P2","P3"], key="f_tipo")
-    with fc3:
+    hc1, hc2, hc3 = st.columns(3)
+    with hc1: hf_tag  = st.selectbox("TAG",  ["Todos"] + sorted(set(e["tag"] for e in cargar_equipos())), key="hf_t")
+    with hc2: hf_tipo = st.selectbox("Tipo", ["Todos","INSPECCION","P1","P2","P3"], key="hf_tp")
+    with hc3:
         if st.button("Actualizar"): st.rerun()
-    datos = cargar_historial()
-    if filtro_tag  != "Todos": datos = [d for d in datos if d["tag"]  == filtro_tag]
-    if filtro_tipo != "Todos": datos = [d for d in datos if d["tipo"] == filtro_tipo]
-    if datos:
-        df = pd.DataFrame(datos)[["id","fecha","tag","tipo","horas_marcha","horas_carga","tecnico_1","tecnico_2","contacto"]]
+
+    hist = cargar_historial()
+    if hf_tag  != "Todos": hist = [h for h in hist if h["tag"]  == hf_tag]
+    if hf_tipo != "Todos": hist = [h for h in hist if h["tipo"] == hf_tipo]
+
+    if hist:
+        df = pd.DataFrame(hist)[["id","fecha","tag","tipo","horas_marcha","horas_carga","tecnico_1","tecnico_2","contacto"]]
         df.columns = ["ID","Fecha","TAG","Tipo","Hrs Marcha","Hrs Carga","Tecnico 1","Tecnico 2","Contacto"]
         st.dataframe(df, use_container_width=True, hide_index=True)
         with st.expander("Eliminar registro"):
-            id_borrar = st.number_input("ID a eliminar", min_value=1, step=1)
+            id_b = st.number_input("ID a eliminar", min_value=1, step=1)
             if st.button("Eliminar", type="primary"):
-                if eliminar_registro(id_borrar):
-                    st.success(f"Registro {id_borrar} eliminado."); st.rerun()
+                if eliminar_registro_hist(id_b):
+                    st.success(f"Registro {id_b} eliminado.")
+                    st.rerun()
     else:
         st.info("No hay registros aun.")
 
-with tab3:
+# ════════════════════════════════════════════════
+# TAB 4 — INFORMES GUARDADOS
+# ════════════════════════════════════════════════
+with tab4:
     st.subheader("Informes Word Guardados")
-    if st.button("Actualizar lista", key="act_inf"): st.rerun()
+    if st.button("Actualizar lista"): st.rerun()
     try:
-        ir = supabase.table("informes").select("*, historial(fecha, tag, tipo)").order("creado_en", desc=True).execute()
-        informes = ir.data if ir.data else []
+        ir = supabase.table("informes").select("*, historial(fecha,tag,tipo)").order("creado_en", desc=True).execute()
+        informes = ir.data or []
     except Exception as e:
-        informes = []; st.warning(f"No se pudieron cargar: {e}")
+        informes = []
+        st.warning(f"Error cargando informes: {e}")
+
     if informes:
         for inf in informes:
-            hist = inf.get("historial", {}) or {}
-            ca, cb, cc, cd = st.columns([3,1,2,1])
-            with ca: st.write(inf["nombre"])
-            with cb: st.write(hist.get("fecha","-"))
-            with cc: st.write(f"{hist.get('tag','-')} — {hist.get('tipo','-')}")
-            with cd:
-                url = obtener_url_informe(inf["ruta"])
+            hist_d = inf.get("historial",{}) or {}
+            ia, ib, ic, id_ = st.columns([3,1,2,1])
+            with ia: st.write(f"**{inf['nombre']}**")
+            with ib: st.write(hist_d.get("fecha","—"))
+            with ic: st.write(f"{hist_d.get('tag','—')} — {hist_d.get('tipo','—')}")
+            with id_:
+                url = obtener_url_informe(inf.get("ruta",""))
                 if url: st.link_button("Descargar", url)
             st.divider()
     else:
         st.info("No hay informes guardados aun.")
+

@@ -350,103 +350,45 @@ with tab1:
 
     if "equipo_sel" not in st.session_state:
         st.session_state["equipo_sel"] = None
+    if "pagina_equipo" not in st.session_state:
+        st.session_state["pagina_equipo"] = "lista"
 
-    # ── Métricas ──
-    total = len(equipos)
-    op    = sum(1 for e in equipos if e.get("estado") == "OPERATIVO")
-    fs    = total - op
-    locs  = sorted(set(e.get("ubicacion","") for e in equipos if e.get("ubicacion")))
-
-    m1, m2, m3, m4 = st.columns(4)
-    with m1: st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#90cdf4'>{total}</div><div class='metric-l'>Total Equipos</div></div>", unsafe_allow_html=True)
-    with m2: st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#48bb78'>{op}</div><div class='metric-l'>Operativos</div></div>", unsafe_allow_html=True)
-    with m3: st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#f56565'>{fs}</div><div class='metric-l'>Fuera de Servicio</div></div>", unsafe_allow_html=True)
-    with m4: st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#f6ad55'>{len(locs)}</div><div class='metric-l'>Ubicaciones</div></div>", unsafe_allow_html=True)
-
-    st.divider()
-
-    # ── Filtros ──
-    cf1, cf2, cf3, cf4 = st.columns(4)
-    with cf1: f_loc   = st.selectbox("Ubicacion", ["Todas"] + locs, key="f_loc")
-    with cf2: f_est   = st.selectbox("Estado", ["Todos","OPERATIVO","FUERA DE SERVICIO"], key="f_est")
-    with cf3: f_marca = st.selectbox("Marca", ["Todas"] + sorted(set(e.get("marca","") for e in equipos if e.get("marca"))), key="f_marca")
-    with cf4: f_bus   = st.text_input("Buscar TAG / Modelo", key="f_bus")
-
-    ef = equipos
-    if f_loc   != "Todas": ef = [e for e in ef if e.get("ubicacion") == f_loc]
-    if f_est   != "Todos": ef = [e for e in ef if e.get("estado") == f_est]
-    if f_marca != "Todas": ef = [e for e in ef if e.get("marca") == f_marca]
-    if f_bus:              ef = [e for e in ef if f_bus.upper() in e.get("tag","").upper() or f_bus.upper() in e.get("modelo","").upper()]
-
-    st.caption(f"Mostrando {len(ef)} equipos — clic en una tarjeta para ver la ficha completa")
-
-    # ── GRID DE TARJETAS (4 columnas) ──
-    cols_per_row = 4
-    rows = [ef[i:i+cols_per_row] for i in range(0, len(ef), cols_per_row)]
-
-    for row in rows:
-        cols = st.columns(cols_per_row)
-        for idx, eq in enumerate(row):
-            with cols[idx]:
-                es_op    = eq.get("estado") == "OPERATIVO"
-                borde    = "#48bb78" if es_op else "#f56565"
-                badge_cl = "badge-op" if es_op else "badge-fs"
-                badge_tx = "OPERATIVO" if es_op else "FUERA DE SERVICIO"
-                seleccionado = st.session_state["equipo_sel"] == eq["tag"]
-                fondo = "#1e2a3a" if seleccionado else "#1a1f2e"
-
-                st.markdown(f"""
-                <div style='background:{fondo};border:1px solid {borde if seleccionado else "#2d3748"};
-                     border-left:4px solid {borde};border-radius:12px;padding:1rem;
-                     margin-bottom:0.2rem;transition:all 0.2s;'>
-                    <div style='font-family:Rajdhani,sans-serif;font-size:1rem;font-weight:700;
-                         color:#e2e8f0;letter-spacing:0.04em'>{eq["tag"]}</div>
-                    <div style='font-size:0.8rem;color:#90cdf4;margin:3px 0'>{eq.get("modelo","")}</div>
-                    <div style='font-size:0.75rem;color:#718096;margin-bottom:8px'>{eq.get("subarea","")}</div>
-                    <span class='estado-badge {badge_cl}'>{badge_tx}</span>
-                </div>
-                """, unsafe_allow_html=True)
-
-                if st.button("Ver ficha", key=f"btn_{eq['tag']}", use_container_width=True):
-                    if st.session_state["equipo_sel"] == eq["tag"]:
-                        st.session_state["equipo_sel"] = None
-                    else:
-                        st.session_state["equipo_sel"] = eq["tag"]
-                    st.rerun()
-
-    # ── FICHA COMPLETA (desplegada debajo del grid) ──
-    sel_tag = st.session_state.get("equipo_sel")
-    if sel_tag:
+    # ════ VISTA FICHA INDIVIDUAL ════
+    if st.session_state["pagina_equipo"] == "ficha" and st.session_state["equipo_sel"]:
+        sel_tag = st.session_state["equipo_sel"]
         eq_data = next((e for e in equipos if e["tag"] == sel_tag), None)
         if eq_data:
-            st.divider()
+            if st.button("← Volver a equipos", key="btn_volver"):
+                st.session_state["pagina_equipo"] = "lista"
+                st.session_state["equipo_sel"] = None
+                st.rerun()
+
             es_op    = eq_data.get("estado") == "OPERATIVO"
             badge_cl = "badge-op" if es_op else "badge-fs"
             badge_tx = "OPERATIVO" if es_op else "FUERA DE SERVICIO"
+            borde    = "#48bb78" if es_op else "#f56565"
 
-            # Header ficha
             st.markdown(f"""
-            <div class='ficha-header'>
-                <div style='display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;'>
+            <div style='background:linear-gradient(135deg,#1a1f2e,#0f3460);border-radius:16px;
+                 padding:2rem;border:1px solid {borde};margin-bottom:1.5rem;'>
+                <div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;'>
                     <div>
-                        <div class='ficha-tag'>🔧 {eq_data["tag"]}</div>
-                        <div class='ficha-modelo'>{eq_data.get("marca","")} · {eq_data.get("modelo","")} · Serie: {eq_data.get("serie","—")}</div>
+                        <div style='font-family:Rajdhani,sans-serif;font-size:2.4rem;font-weight:700;color:#fff;'>🔧 {eq_data["tag"]}</div>
+                        <div style='font-size:1rem;color:#90cdf4;margin-top:4px;'>{eq_data.get("marca","")} · {eq_data.get("modelo","")} · Serie: {eq_data.get("serie","—")}</div>
                     </div>
-                    <span class='estado-badge {badge_cl}' style='font-size:0.85rem;padding:6px 16px;'>{badge_tx}</span>
+                    <span class='estado-badge {badge_cl}' style='font-size:0.9rem;padding:8px 20px;'>{badge_tx}</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-            # Datos clave
-            d1, d2, d3, d4 = st.columns(4)
-            with d1: st.markdown(f"<div class='dato-box'><div class='dato-label'>Modelo</div><div class='dato-valor'>{eq_data.get('modelo','—')}</div></div>", unsafe_allow_html=True)
-            with d2: st.markdown(f"<div class='dato-box'><div class='dato-label'>Marca</div><div class='dato-valor'>{eq_data.get('marca','—')}</div></div>", unsafe_allow_html=True)
-            with d3: st.markdown(f"<div class='dato-box'><div class='dato-label'>Area</div><div class='dato-valor' style='font-size:1rem'>{eq_data.get('area','—')}</div></div>", unsafe_allow_html=True)
-            with d4: st.markdown(f"<div class='dato-box'><div class='dato-label'>Ubicacion</div><div class='dato-valor'>{eq_data.get('ubicacion','—')}</div></div>", unsafe_allow_html=True)
+            d1, d2, d3, d4, d5 = st.columns(5)
+            datos_cols = [(d1,"Modelo",eq_data.get("modelo","—")),(d2,"Marca",eq_data.get("marca","—")),(d3,"Subarea",eq_data.get("subarea","—")),(d4,"Area",eq_data.get("area","—")),(d5,"Ubicacion",eq_data.get("ubicacion","—"))]
+            for col, lbl, val in datos_cols:
+                with col:
+                    st.markdown(f"<div class='dato-box'><div class='dato-label'>{lbl}</div><div class='dato-valor' style='font-size:0.95rem'>{val}</div></div>", unsafe_allow_html=True)
 
-            st.markdown(f"<div style='margin-top:0.6rem'><div class='dato-box'><div class='dato-label'>Subarea</div><div class='dato-valor' style='font-size:1rem'>{eq_data.get('subarea','—')}</div></div></div>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
 
-            # Último mantenimiento
             try:
                 ult_res = supabase.table("historial").select("fecha,tipo,horas_marcha").eq("tag", sel_tag).order("creado_en", desc=True).limit(1).execute()
                 ult = ult_res.data[0] if ult_res.data else None
@@ -455,38 +397,35 @@ with tab1:
 
             if ult:
                 st.markdown(f"""
-                <div style='margin-top:0.8rem;background:#1a1f2e;border-radius:10px;padding:1rem 1.4rem;border:1px solid #2d3748;'>
-                    <div class='dato-label' style='margin-bottom:0.6rem'>Ultimo Mantenimiento Registrado</div>
-                    <div style='display:flex;gap:2rem;flex-wrap:wrap;'>
-                        <div><div style='color:#718096;font-size:0.78rem'>Fecha</div><div style='color:#e2e8f0;font-weight:600;font-size:1rem'>{ult["fecha"]}</div></div>
-                        <div><div style='color:#718096;font-size:0.78rem'>Tipo</div><div style='color:#90cdf4;font-weight:600;font-size:1rem'>{ult["tipo"]}</div></div>
-                        <div><div style='color:#718096;font-size:0.78rem'>Horas Marcha</div><div style='color:#f6ad55;font-weight:600;font-size:1rem'>{ult["horas_marcha"]} hrs</div></div>
+                <div style='background:#1a1f2e;border-radius:12px;padding:1.2rem 1.6rem;border:1px solid #2d3748;margin-bottom:1.5rem;'>
+                    <div style='font-size:0.7rem;color:#718096;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.8rem'>Ultimo Mantenimiento</div>
+                    <div style='display:flex;gap:3rem;flex-wrap:wrap;'>
+                        <div><div style='color:#718096;font-size:0.8rem'>Fecha</div><div style='color:#e2e8f0;font-weight:600;font-size:1.1rem'>{ult["fecha"]}</div></div>
+                        <div><div style='color:#718096;font-size:0.8rem'>Tipo</div><div style='color:#90cdf4;font-weight:600;font-size:1.1rem'>{ult["tipo"]}</div></div>
+                        <div><div style='color:#718096;font-size:0.8rem'>Horas Marcha</div><div style='color:#f6ad55;font-weight:600;font-size:1.1rem'>{ult["horas_marcha"]} hrs</div></div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
             else:
-                st.markdown("<div style='margin-top:0.8rem;background:#1a1f2e;border-radius:10px;padding:1rem;border:1px solid #2d3748;color:#718096;font-size:0.85rem'>Sin mantenimientos registrados aun.</div>", unsafe_allow_html=True)
+                st.markdown("<div style='background:#1a1f2e;border-radius:12px;padding:1rem;border:1px solid #2d3748;color:#718096;margin-bottom:1.5rem;'>Sin mantenimientos registrados aun.</div>", unsafe_allow_html=True)
 
-            st.markdown("<div style='margin-top:1.2rem'></div>", unsafe_allow_html=True)
-
-            # Columnas: componentes | editar
-            col_comp, col_edit = st.columns([1, 1])
+            col_comp, col_edit = st.columns(2)
 
             with col_comp:
-                st.markdown("#### 🔩 Componentes / Repuestos")
+                st.markdown("### 🔩 Componentes / Repuestos")
                 comps = cargar_componentes(sel_tag)
                 if comps:
                     for c in comps:
                         cc1, cc2, cc3 = st.columns([2, 3, 1])
-                        with cc1: st.markdown(f"<div class='comp-tipo'>{c.get('tipo','')}</div>", unsafe_allow_html=True)
-                        with cc2: st.markdown(f"<div class='comp-parte'>{c.get('numero_parte','—')}</div><div style='font-size:0.75rem;color:#718096'>{c.get('descripcion','')}</div>", unsafe_allow_html=True)
+                        with cc1: st.markdown(f"<div style='font-size:0.75rem;color:#718096;text-transform:uppercase'>{c.get('tipo','')}</div>", unsafe_allow_html=True)
+                        with cc2: st.markdown(f"<div style='font-family:Rajdhani,sans-serif;font-size:1rem;font-weight:600;color:#90cdf4'>{c.get('numero_parte','—')}</div><div style='font-size:0.75rem;color:#718096'>{c.get('descripcion','')}</div>", unsafe_allow_html=True)
                         with cc3:
                             if st.button("🗑", key=f"del_c_{c['id']}"):
                                 eliminar_componente(c["id"])
                                 st.rerun()
                 else:
                     st.caption("Sin componentes registrados.")
-
+                st.markdown("<br>", unsafe_allow_html=True)
                 with st.expander("➕ Agregar componente"):
                     nc1, nc2 = st.columns(2)
                     with nc1: n_tipo  = st.selectbox("Tipo", ["Filtro de aire","Filtro de aceite","Filtro separador","Aceite (referencia)","Kit de mantenimiento","Otro"], key=f"nt_{sel_tag}")
@@ -501,7 +440,7 @@ with tab1:
                             st.warning("Ingresa el numero de parte.")
 
             with col_edit:
-                st.markdown("#### ✏️ Editar Datos del Equipo")
+                st.markdown("### ✏️ Editar Datos")
                 ec1, ec2 = st.columns(2)
                 with ec1:
                     e_modelo  = st.text_input("Modelo",    value=eq_data.get("modelo",""),    key=f"em_{sel_tag}")
@@ -514,18 +453,73 @@ with tab1:
                 e_estado = st.selectbox("Estado", ["OPERATIVO","FUERA DE SERVICIO"],
                                         index=0 if eq_data.get("estado")=="OPERATIVO" else 1,
                                         key=f"ee_{sel_tag}")
-                if st.button("Guardar cambios", key=f"save_{sel_tag}", use_container_width=True):
-                    upsert_equipo({
-                        "tag": sel_tag, "modelo": e_modelo, "serie": e_serie, "marca": e_marca,
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("💾 Guardar cambios", key=f"save_{sel_tag}", use_container_width=True):
+                    upsert_equipo({"tag": sel_tag, "modelo": e_modelo, "serie": e_serie, "marca": e_marca,
                         "subarea": e_subarea, "area": e_area, "ubicacion": e_ubic, "estado": e_estado,
-                        "actualizado_en": datetime.now().isoformat()
-                    })
+                        "actualizado_en": datetime.now().isoformat()})
                     st.success("Equipo actualizado.")
                     st.rerun()
 
-            if st.button("✕ Cerrar ficha", key="cerrar_ficha"):
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("← Volver a equipos", key="btn_volver2"):
+                st.session_state["pagina_equipo"] = "lista"
                 st.session_state["equipo_sel"] = None
                 st.rerun()
+
+    else:
+        # ════ VISTA GRID ════
+        total = len(equipos)
+        op    = sum(1 for e in equipos if e.get("estado") == "OPERATIVO")
+        fs    = total - op
+        locs  = sorted(set(e.get("ubicacion","") for e in equipos if e.get("ubicacion")))
+
+        m1, m2, m3, m4 = st.columns(4)
+        with m1: st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#90cdf4'>{total}</div><div class='metric-l'>Total Equipos</div></div>", unsafe_allow_html=True)
+        with m2: st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#48bb78'>{op}</div><div class='metric-l'>Operativos</div></div>", unsafe_allow_html=True)
+        with m3: st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#f56565'>{fs}</div><div class='metric-l'>Fuera de Servicio</div></div>", unsafe_allow_html=True)
+        with m4: st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#f6ad55'>{len(locs)}</div><div class='metric-l'>Ubicaciones</div></div>", unsafe_allow_html=True)
+
+        st.divider()
+
+        cf1, cf2, cf3, cf4 = st.columns(4)
+        with cf1: f_loc   = st.selectbox("Ubicacion", ["Todas"] + locs, key="f_loc")
+        with cf2: f_est   = st.selectbox("Estado", ["Todos","OPERATIVO","FUERA DE SERVICIO"], key="f_est")
+        with cf3: f_marca = st.selectbox("Marca", ["Todas"] + sorted(set(e.get("marca","") for e in equipos if e.get("marca"))), key="f_marca")
+        with cf4: f_bus   = st.text_input("Buscar TAG / Modelo", key="f_bus")
+
+        ef = equipos
+        if f_loc   != "Todas": ef = [e for e in ef if e.get("ubicacion") == f_loc]
+        if f_est   != "Todos": ef = [e for e in ef if e.get("estado") == f_est]
+        if f_marca != "Todas": ef = [e for e in ef if e.get("marca") == f_marca]
+        if f_bus:               ef = [e for e in ef if f_bus.upper() in e.get("tag","").upper() or f_bus.upper() in e.get("modelo","").upper()]
+
+        st.caption(f"Mostrando {len(ef)} equipos — clic en una tarjeta para ver la ficha")
+
+        cols_per_row = 4
+        rows = [ef[i:i+cols_per_row] for i in range(0, len(ef), cols_per_row)]
+        for row in rows:
+            cols = st.columns(cols_per_row)
+            for idx, eq in enumerate(row):
+                with cols[idx]:
+                    es_op    = eq.get("estado") == "OPERATIVO"
+                    borde    = "#48bb78" if es_op else "#f56565"
+                    badge_cl = "badge-op" if es_op else "badge-fs"
+                    badge_tx = "OPERATIVO" if es_op else "FUERA DE SERVICIO"
+                    st.markdown(f"""
+                    <div style='background:#1a1f2e;border-left:4px solid {borde};border-radius:12px;
+                         padding:1rem;border:1px solid #2d3748;margin-bottom:0.2rem;'>
+                        <div style='font-family:Rajdhani,sans-serif;font-size:1rem;font-weight:700;color:#e2e8f0;'>{eq["tag"]}</div>
+                        <div style='font-size:0.8rem;color:#90cdf4;margin:3px 0'>{eq.get("modelo","")}</div>
+                        <div style='font-size:0.75rem;color:#718096;margin-bottom:8px'>{eq.get("subarea","")}</div>
+                        <span class='estado-badge {badge_cl}'>{badge_tx}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if st.button("Ver ficha ›", key=f"btn_{eq['tag']}", use_container_width=True):
+                        st.session_state["equipo_sel"] = eq["tag"]
+                        st.session_state["pagina_equipo"] = "ficha"
+                        st.rerun()
+
 
 # ════════════════════════════════════════════════
 # TAB 2 — GENERAR INFORME
@@ -686,5 +680,6 @@ with tab4:
             st.divider()
     else:
         st.info("No hay informes guardados aun.")
+
 
 

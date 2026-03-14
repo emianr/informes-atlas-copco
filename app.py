@@ -522,111 +522,143 @@ with tab1:
 
 
 # ════════════════════════════════════════════════
-# TAB 2 — GENERAR INFORME
+# ════════════════════════════════════════════════
+# TAB 2 — GENERAR INFORME (nuevo formato PDF)
 # ════════════════════════════════════════════════
 with tab2:
     equipos_list = cargar_equipos()
     tags_list    = [e["tag"] for e in equipos_list]
 
-    ct1, ct2 = st.columns(2)
-    with ct1: tag_sel   = st.selectbox("TAG del equipo", tags_list, key="inf_tag")
-    with ct2: tipo_mant = st.selectbox("Tipo de Mantencion", ["INSPECCION","P1","P2","P3"])
+    st.markdown("### 📋 Nuevo Informe de Servicio")
 
-    eq_inf = next((e for e in equipos_list if e["tag"] == tag_sel), {})
-    mod_aut  = eq_inf.get("modelo","")
-    ser_aut  = eq_inf.get("serie","")
-    loc_aut  = eq_inf.get("subarea","")
-    area_aut = eq_inf.get("area","")
-    st.info(f"Equipo: {mod_aut} | Serie: {ser_aut} | Subarea: {loc_aut} | Area: {area_aut}")
+    ct1, ct2 = st.columns(2)
+    with ct1:
+        tag_sel_inf = st.selectbox("TAG del equipo", tags_list, key="inf_tag")
+    with ct2:
+        tipo_orden_sel = st.selectbox("Tipo de Orden", ["INSPECCIÓN", "P1", "P2", "P3", "MANTENCIÓN"])
+
+    eq_inf   = next((e for e in equipos_list if e["tag"] == tag_sel_inf), {})
+    mod_inf  = eq_inf.get("modelo", "")
+    ser_inf  = eq_inf.get("serie", "")
+    sub_inf  = eq_inf.get("subarea", "")
+    area_inf = eq_inf.get("area", "")
+    ubic_inf = eq_inf.get("ubicacion", "")
+
+    st.info(f"**{mod_inf}** | Serie: {ser_inf} | {sub_inf} | {area_inf} | {ubic_inf}")
 
     try:
-        ur = supabase.table("historial").select("*").eq("tag", tag_sel).order("creado_en", desc=True).limit(1).execute()
-        ult_inf = ur.data[0] if ur.data else None
+        ur2 = supabase.table("historial").select("*").eq("tag", tag_sel_inf).order("creado_en", desc=True).limit(1).execute()
+        ult_inf2 = ur2.data[0] if ur2.data else None
     except:
-        ult_inf = None
+        ult_inf2 = None
 
-    h_sug   = int(ult_inf["horas_marcha"]) if ult_inf else 0
-    hc_sug  = int(ult_inf["horas_carga"])  if ult_inf else 0
-    if ult_inf:
-        st.caption(f"Ultimo registro: {ult_inf['fecha']} — {ult_inf['tipo']} — {h_sug} hrs marcha")
+    h_sug2 = int(ult_inf2["horas_marcha"]) if ult_inf2 else 0
 
     st.divider()
-    with st.form("form_informe"):
-        st.subheader("Datos Generales")
-        fi1, fi2 = st.columns(2)
-        with fi1:
-            fecha_sel    = st.date_input("Fecha", datetime.now())
-            tec1         = st.text_input("Tecnico 1", st.secrets.get("tec1_default","Ignacio Morales"))
-        with fi2:
-            cliente_cont = st.text_input("Contacto Cliente", st.secrets.get("contacto_default","Pamela Tapia"))
-            tec2         = st.text_input("Tecnico 2", st.secrets.get("tec2_default","Emian Sanchez"))
 
-        st.subheader("Horas")
-        fh1, fh2 = st.columns(2)
-        with fh1: h_marcha = st.number_input("Horas Marcha", value=h_sug, step=1)
-        with fh2: h_carga  = st.number_input("Horas Carga",  value=hc_sug, step=1)
+    with st.form("form_informe_pdf"):
 
-        st.subheader("Parametros")
-        fp1, fp2, fp3 = st.columns(3)
-        with fp1: v_p_carga    = st.text_input("Presion Carga (bar)", "6.4")
-        with fp2: v_p_descarga = st.text_input("Presion Descarga (bar)", "6.8")
-        with fp3: v_t_salida   = st.text_input("Temp. Salida (C)", "80")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown("**Datos Generales**")
+            fecha_inf    = st.date_input("Fecha", datetime.now(), key="fecha_inf")
+            ot_inf       = st.text_input("Número OT / Orden de Servicio", "")
+            contacto_inf = st.text_input("Contacto", st.secrets.get("contacto_default", "Pamela Arancibia"))
+        with col_b:
+            st.markdown("**Técnicos**")
+            tec1_inf = st.text_input("Técnico 1", st.secrets.get("tec1_default", "Ignacio Morales"))
+            tec2_inf = st.text_input("Técnico 2", st.secrets.get("tec2_default", "Emian Sanchez"))
+            horas_tec = st.text_input("Horas por técnico", "2")
 
-        st.subheader("Contenido del Informe")
-        tpl = get_plantilla(tipo_mant, mod_aut, tag_sel, loc_aut, area_aut, v_p_carga, v_p_descarga, v_t_salida)
-        alcance_m     = st.text_area("Alcance",        value=tpl["alcance"],         height=70)
-        actividades_m = st.text_area("Actividades",    value=tpl["actividades"],     height=220)
-        condicion_m   = st.text_area("Condicion Final",value=tpl["condicion"],       height=90)
-        rec_m         = st.text_area("Recomendaciones",value=tpl["recomendaciones"], height=90)
+        st.markdown("**Parámetros Operacionales**")
+        p1, p2, p3, p4 = st.columns(4)
+        with p1: nivel_aceite  = st.text_input("Nivel de aceite", "100%")
+        with p2: presion_sal   = st.text_input("Presión de Salida", "")
+        with p3: temp_elem     = st.text_input("Temp. salida elemento", "")
+        with p4: col_p1, col_p2 = st.columns(2)
+        with col_p1: banda_carga    = st.text_input("Banda carga", "")
+        with col_p2: banda_descarga = st.text_input("Banda descarga", "")
+
+        st.markdown("**Datos del Equipo**")
+        e1, e2 = st.columns(2)
+        with e1:
+            modelo_edit = st.text_input("Modelo equipo", mod_inf)
+            serie_edit  = st.text_input("Número de Serie", ser_inf)
+            h_marcha_inf = st.number_input("Horas Marcha", value=h_sug2, step=1)
+        with e2:
+            ubicacion_edit  = st.text_input("Ubicación (ej: descarga de ácido)", sub_inf.lower() if sub_inf else "")
+            planta_edit     = st.text_input("Planta (ej: planta hidrometalurgia)", f"planta {area_inf.lower()}" if area_inf else "")
+            proxima_visita  = st.text_input("Próxima Visita", "2000 Hrs / Corresponde pauta de: [ 2.000hrs ]")
+
+        st.markdown("**Comentarios del Informe**")
+        comentarios_default = (
+            f"Se realiza {tipo_orden_sel.lower()} programada.\n"
+            "Se chequea parámetros en módulo de control óptimos.\n"
+            "Se chequea existencia de fugas y filtraciones. Sin observaciones\n"
+            "Se chequea carrocería. Sin observaciones\n"
+            "Se realizan pruebas operacionales en carga y descarga de equipo, "
+            "operando de forma óptima según configuración en módulo de control.\n"
+            "Equipo operativo."
+        )
+        comentarios_inf = st.text_area("Comentarios", value=comentarios_default, height=130)
+
         st.divider()
-        enviar = st.form_submit_button("GUARDAR Y GENERAR REPORTE", use_container_width=True)
+        enviar_pdf = st.form_submit_button("📄 GENERAR Y DESCARGAR PDF", use_container_width=True)
 
-    if enviar:
-        TEMPLATE_PATH = "InformeInspección.docx"
-        if not os.path.exists(TEMPLATE_PATH):
-            st.error(f"Template Word no encontrado: '{TEMPLATE_PATH}'")
-            st.stop()
+    if enviar_pdf:
         try:
-            doc   = DocxTemplate(TEMPLATE_PATH)
-            meses = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"]
-            fecha_txt = f"{fecha_sel.day} de {meses[fecha_sel.month-1]} de {fecha_sel.year}"
-            contexto = {
-                "fecha": fecha_txt, "cliente_contact": cliente_cont,
-                "alcanze_intervencion": alcance_m, "operaciones_dinamicas": actividades_m,
-                "p_carga": v_p_carga, "p_descarga": v_p_descarga, "temp_salida": v_t_salida,
-                "estado_entrega": condicion_m, "recomendaciones": rec_m,
-                "proxima_visita": tpl["proxima_visita"],
-                "tecnico_1": tec1, "tecnico_2": tec2,
-                "act_1": "Mantenimiento", "h_1": "8", "h_2": "8",
-                "equipo_modelo": mod_aut, "serie": ser_aut,
-                "horas_marcha": f"{h_marcha} Hrs.", "tipo_orden": tpl["tipo_orden_txt"],
-                "horas_totales_despues": h_marcha, "horas_carga_despues": h_carga, "tag": tag_sel,
+            from generar_informe_pdf import generar_pdf, ACTIVIDADES_DEFAULT
+            fecha_str = fecha_inf.strftime("%d/%m/%Y")
+            datos_pdf = {
+                "fecha":          fecha_str,
+                "contacto":       contacto_inf,
+                "tag":            tag_sel_inf,
+                "equipo_modelo":  modelo_edit,
+                "serie":          serie_edit,
+                "ubicacion":      ubicacion_edit,
+                "planta":         planta_edit,
+                "nivel_aceite":   nivel_aceite,
+                "presion_salida": presion_sal,
+                "temp_elemento":  temp_elem,
+                "banda_carga":    banda_carga,
+                "banda_descarga": banda_descarga,
+                "comentarios":    comentarios_inf,
+                "tecnico_1":      tec1_inf,
+                "tecnico_2":      tec2_inf,
+                "horas_1":        horas_tec,
+                "horas_marcha":   str(h_marcha_inf),
+                "orden_servicio": ot_inf,
+                "tipo_orden":     tipo_orden_sel,
+                "proxima_visita": proxima_visita,
+                "actividades":    ACTIVIDADES_DEFAULT,
             }
-            doc.render(contexto)
-            output = io.BytesIO()
-            doc.save(output)
-            ab = output.getvalue()
-            nf = f"Informe_{tipo_mant}_{tag_sel}_{fecha_sel}.docx"
+            pdf_bytes = generar_pdf(datos_pdf)
+            nombre_pdf = f"Informe_{tipo_orden_sel}_{tag_sel_inf}_{fecha_inf}.pdf"
 
-            with st.spinner("Guardando..."):
+            with st.spinner("Guardando registro..."):
                 rid = guardar_registro({
-                    "fecha": str(fecha_sel), "tag": tag_sel, "tipo": tipo_mant,
-                    "horas_marcha": h_marcha, "horas_carga": h_carga,
-                    "tecnico_1": tec1, "tecnico_2": tec2, "contacto": cliente_cont,
-                    "p_carga": v_p_carga, "p_descarga": v_p_descarga, "temp_salida": v_t_salida,
-                    "alcance": alcance_m, "actividades": actividades_m,
-                    "condicion": condicion_m, "recomendaciones": rec_m,
+                    "fecha": str(fecha_inf), "tag": tag_sel_inf, "tipo": tipo_orden_sel,
+                    "horas_marcha": h_marcha_inf, "horas_carga": 0,
+                    "tecnico_1": tec1_inf, "tecnico_2": tec2_inf, "contacto": contacto_inf,
+                    "p_carga": banda_carga, "p_descarga": banda_descarga, "temp_salida": temp_elem,
+                    "alcance": comentarios_inf[:500], "actividades": "", "condicion": "", "recomendaciones": "",
                 })
-                if rid: guardar_informe_storage(rid, nf, ab)
+                if rid:
+                    guardar_informe_storage(rid, nombre_pdf, pdf_bytes)
 
-            st.success(f"Guardado — {tpl['tipo_orden_txt']} | {tag_sel} | {fecha_txt}")
-            st.download_button("DESCARGAR REPORTE", ab, nf,
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True)
+            st.success(f"✅ Informe generado — {tipo_orden_sel} | {tag_sel_inf} | {fecha_str}")
+            st.download_button(
+                "📥 DESCARGAR PDF",
+                pdf_bytes,
+                nombre_pdf,
+                mime="application/pdf",
+                use_container_width=True
+            )
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"Error generando PDF: {e}")
+            import traceback
+            st.code(traceback.format_exc())
 
-# ════════════════════════════════════════════════
 # TAB 3 — HISTORIAL
 # ════════════════════════════════════════════════
 with tab3:
@@ -680,6 +712,5 @@ with tab4:
             st.divider()
     else:
         st.info("No hay informes guardados aun.")
-
 
 

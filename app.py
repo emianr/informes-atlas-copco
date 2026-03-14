@@ -535,7 +535,7 @@ with tab2:
     with ct1:
         tag_sel_inf = st.selectbox("TAG del equipo", tags_list, key="inf_tag")
     with ct2:
-        tipo_orden_sel = st.selectbox("Tipo de Orden", ["INSPECCIÓN", "P1", "P2", "P3", "MANTENCIÓN"])
+        tipo_orden_sel = st.selectbox("Tipo de Orden", ["INSPECCIÓN", "2.000 hrs", "4.000 hrs", "8.000 hrs", "16.000 hrs"])
 
     eq_inf   = next((e for e in equipos_list if e["tag"] == tag_sel_inf), {})
     mod_inf  = eq_inf.get("modelo", "")
@@ -588,7 +588,14 @@ with tab2:
         with e2:
             ubicacion_edit  = st.text_input("Ubicación (ej: descarga de ácido)", sub_inf.lower() if sub_inf else "")
             planta_edit     = st.text_input("Planta (ej: planta hidrometalurgia)", f"planta {area_inf.lower()}" if area_inf else "")
-            proxima_visita  = st.text_input("Próxima Visita", "2000 Hrs / Corresponde pauta de: [ 2.000hrs ]")
+            proximas_map = {
+                "INSPECCIÓN":  "Corresponde pauta de: [ 2.000 hrs ]",
+                "2.000 hrs":   "Corresponde pauta de: [ 4.000 hrs ]",
+                "4.000 hrs":   "Corresponde pauta de: [ 8.000 hrs ]",
+                "8.000 hrs":   "Corresponde pauta de: [ 16.000 hrs ]",
+                "16.000 hrs":  "Corresponde pauta de: [ 2.000 hrs ]",
+            }
+            proxima_visita  = st.text_input("Próxima Visita", proximas_map.get(tipo_orden_sel, ""))
 
         st.markdown("**Comentarios del Informe**")
         comentarios_default = (
@@ -665,7 +672,7 @@ with tab3:
     st.subheader("Historial de Mantenciones")
     hc1, hc2, hc3 = st.columns(3)
     with hc1: hf_tag  = st.selectbox("TAG",  ["Todos"] + sorted(set(e["tag"] for e in cargar_equipos())), key="hf_t")
-    with hc2: hf_tipo = st.selectbox("Tipo", ["Todos","INSPECCION","P1","P2","P3"], key="hf_tp")
+    with hc2: hf_tipo = st.selectbox("Tipo", ["Todos","INSPECCIÓN","2.000 hrs","4.000 hrs","8.000 hrs","16.000 hrs"], key="hf_tp")
     with hc3:
         if st.button("Actualizar"): st.rerun()
 
@@ -712,5 +719,3 @@ with tab4:
             st.divider()
     else:
         st.info("No hay informes guardados aun.")
-
-

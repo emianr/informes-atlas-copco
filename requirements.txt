@@ -3,3 +3,4 @@ docxtpl
 pandas
 openpyxl
 supabase
+reportlab

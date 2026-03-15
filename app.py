@@ -586,8 +586,8 @@ with tab2:
             serie_edit  = st.text_input("Número de Serie", ser_inf)
             h_marcha_inf = st.number_input("Horas Marcha", value=h_sug2, step=1)
         with e2:
-            ubicacion_edit  = st.text_input("Ubicación (ej: descarga de ácido)", sub_inf.lower() if sub_inf else "")
-            planta_edit     = st.text_input("Planta (ej: planta hidrometalurgia)", f"planta {area_inf.lower()}" if area_inf else "")
+            ubicacion_edit  = st.text_input("Ubicación / Subárea", sub_inf if sub_inf else "")
+            planta_edit     = st.text_input("Planta / Área", ubic_inf if ubic_inf else "")
             proximas_map = {
                 "INSPECCIÓN":  "Corresponde pauta de: [ 2.000 hrs ]",
                 "2.000 hrs":   "Corresponde pauta de: [ 4.000 hrs ]",

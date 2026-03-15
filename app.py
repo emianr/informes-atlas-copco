@@ -337,10 +337,101 @@ def inicializar_equipos():
 
 inicializar_equipos()
 
-# ── UI ────────────────────────────────────────────────────────────────────────
-st.markdown("<h1 style='font-family:Rajdhani,sans-serif;font-size:2.4rem;color:#e2e8f0;'>🛡️ CENTINELA</h1><p style='color:#718096;margin-top:-10px;'>Sistema de Gestión de Equipos — Minera Spence</p>", unsafe_allow_html=True)
+# ── Login ────────────────────────────────────────────────────────────────────
+def verificar_usuario(username: str, pin: str):
+    try:
+        # Busca por username exacto (acepta correo o nombre.apellido)
+        res = supabase.table("usuarios").select("*") \
+            .eq("username", username.lower().strip()) \
+            .eq("pin", pin.strip()) \
+            .eq("activo", True).execute()
+        return res.data[0] if res.data else None
+    except:
+        return None
 
-tab1, tab2, tab3, tab4 = st.tabs(["🏭 Equipos", "📋 Generar Informe", "📊 Historial", "📁 Informes"])
+def get_usuario_activo():
+    return st.session_state.get("usuario_activo")
+
+# Pantalla de login
+if "usuario_activo" not in st.session_state:
+    st.session_state["usuario_activo"] = None
+
+if not st.session_state["usuario_activo"]:
+    st.markdown("""
+    <style>
+    .login-wrap {
+        max-width: 380px; margin: 4rem auto;
+        background: linear-gradient(135deg, #1a1f2e, #16213e);
+        border-radius: 20px; padding: 2.5rem;
+        border: 1px solid #2d3748;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+    .login-logo { text-align: center; margin-bottom: 2rem; }
+    .login-title {
+        font-family: Rajdhani, sans-serif;
+        font-size: 2rem; font-weight: 700;
+        color: #e2e8f0; text-align: center;
+        margin-bottom: 0.3rem;
+    }
+    .login-sub { color: #718096; text-align: center; font-size: 0.85rem; margin-bottom: 2rem; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col_l, col_c, col_r = st.columns([1, 2, 1])
+    with col_c:
+        st.markdown("<div class='login-title'>🛡️ CENTINELA</div>", unsafe_allow_html=True)
+        st.markdown("<div class='login-sub'>Sistema de Gestión de Equipos<br>Minera Spence</div>", unsafe_allow_html=True)
+        st.divider()
+
+        with st.form("form_login"):
+            username_l = st.text_input("📧 Usuario o Correo", placeholder="nombre.apellido o nombre.apellido@atlascopco.com")
+            pin_l      = st.text_input("🔑 PIN", type="password", placeholder="••••")
+            entrar     = st.form_submit_button("INGRESAR", use_container_width=True, type="primary")
+
+        if entrar:
+            if not username_l or not pin_l:
+                st.error("Ingresa usuario y PIN")
+            else:
+                user = verificar_usuario(username_l, pin_l)
+                if user:
+                    st.session_state["usuario_activo"] = user
+                    st.rerun()
+                else:
+                    st.error("❌ Usuario o PIN incorrecto")
+    st.stop()
+
+# ── Usuario logueado ──
+usuario = st.session_state["usuario_activo"]
+rol_icons = {"admin": "⚙️", "supervisor": "👁️", "tecnico": "🔧"}
+
+# ── UI ────────────────────────────────────────────────────────────────────────
+col_titulo, col_user = st.columns([3, 1])
+with col_titulo:
+    st.markdown("<h1 style='font-family:Rajdhani,sans-serif;font-size:2.4rem;color:#e2e8f0;'>🛡️ CENTINELA</h1><p style='color:#718096;margin-top:-10px;'>Sistema de Gestión de Equipos — Minera Spence</p>", unsafe_allow_html=True)
+with col_user:
+    rol_icon = rol_icons.get(usuario.get("rol","tecnico"), "🔧")
+    st.markdown(f"""
+    <div style='background:#1a1f2e;border-radius:10px;padding:0.6rem 1rem;
+         border:1px solid #2d3748;text-align:right;margin-top:0.5rem;'>
+        <div style='font-size:0.75rem;color:#718096'>{rol_icon} {usuario.get("rol","").upper()}</div>
+        <div style='font-family:Rajdhani,sans-serif;font-size:1rem;font-weight:700;color:#e2e8f0'>{usuario.get("nombre","")}</div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("Salir", key="btn_logout", use_container_width=True):
+        st.session_state["usuario_activo"] = None
+        st.session_state["wizard_paso"] = 1
+        st.session_state["wizard_datos"] = {}
+        st.rerun()
+
+tabs_list = ["🏭 Equipos", "📋 Generar Informe", "📊 Historial", "📁 Informes"]
+if usuario.get("rol") in ["admin", "supervisor"]:
+    tabs_list.append("👥 Usuarios")
+_tabs = st.tabs(tabs_list)
+tab1 = _tabs[0]
+tab2 = _tabs[1]
+tab3 = _tabs[2]
+tab4 = _tabs[3]
+tab5 = _tabs[4] if len(_tabs) > 4 else None
 
 # ════════════════════════════════════════════════
 # TAB 1 — EQUIPOS
@@ -682,7 +773,8 @@ with tab2:
         </div>
         """, unsafe_allow_html=True)
 
-        tec1_p2   = st.text_input("Técnico 1 (Líder)", datos_w.get("tecnico_1", st.secrets.get("tec1_default","Ignacio Morales")), key="p2_t1")
+        nombre_usuario = usuario.get("nombre", st.secrets.get("tec1_default","Ignacio Morales"))
+        tec1_p2   = st.text_input("Técnico 1 (Líder)", datos_w.get("tecnico_1", nombre_usuario), key="p2_t1")
         tec2_p2   = st.text_input("Técnico 2", datos_w.get("tecnico_2", st.secrets.get("tec2_default","Emian Sanchez")), key="p2_t2")
         horas_p2  = st.text_input("Horas trabajadas por técnico", datos_w.get("horas_1","2"), key="p2_hrs")
         cont_p2   = st.text_input("Contacto cliente", datos_w.get("contacto", st.secrets.get("contacto_default","Pamela Arancibia")), key="p2_cont")
@@ -935,3 +1027,87 @@ with tab4:
             st.divider()
     else:
         st.info("No hay informes guardados aun.")
+
+# ════════════════════════════════════════════════
+# TAB 5 — GESTIÓN DE USUARIOS (admin/supervisor)
+# ════════════════════════════════════════════════
+if tab5:
+    with tab5:
+        if usuario.get("rol") not in ["admin","supervisor"]:
+            st.info("No tienes acceso a esta sección")
+            st.stop()
+        st.subheader("👥 Gestión de Usuarios")
+
+        # Listar usuarios
+        try:
+            res_u = supabase.table("usuarios").select("*").order("rol").execute()
+            usuarios_list = res_u.data or []
+        except:
+            usuarios_list = []
+
+        if usuarios_list:
+            for u in usuarios_list:
+                rol_color = {"admin": "#f6ad55", "supervisor": "#90cdf4", "tecnico": "#48bb78"}.get(u.get("rol",""), "#718096")
+                estado = "✅" if u.get("activo") else "❌"
+                ua, ub, uc, ud = st.columns([2, 2, 1, 1])
+                with ua: st.markdown("**" + u.get('nombre','') + "**  \n`" + u.get('username','') + "`")
+                with ub: st.markdown(f"<span style='color:{rol_color};font-weight:600'>{u.get('rol','').upper()}</span>", unsafe_allow_html=True)
+                with uc: st.markdown(estado)
+                with ud:
+                    if usuario.get("rol") == "admin":
+                        if st.button("🗑️", key=f"del_u_{u['id']}", help="Desactivar"):
+                            supabase.table("usuarios").update({"activo": False}).eq("id", u["id"]).execute()
+                            st.rerun()
+            st.divider()
+
+        if usuario.get("rol") == "admin":
+            st.markdown("#### ➕ Agregar Usuario")
+            with st.form("form_nuevo_usuario"):
+                nu1, nu2 = st.columns(2)
+                with nu1:
+                    nuevo_nombre   = st.text_input("Nombre completo")
+                    nuevo_username = st.text_input("Usuario (sin espacios)")
+                with nu2:
+                    nuevo_pin  = st.text_input("PIN (4 dígitos)", max_chars=4)
+                    nuevo_rol  = st.selectbox("Rol", ["tecnico", "supervisor", "admin"])
+                guardar_u = st.form_submit_button("Guardar Usuario", use_container_width=True, type="primary")
+
+            if guardar_u:
+                if nuevo_nombre and nuevo_username and nuevo_pin:
+                    try:
+                        supabase.table("usuarios").insert({
+                            "nombre": nuevo_nombre,
+                            "username": nuevo_username.lower().strip(),
+                            "pin": nuevo_pin,
+                            "rol": nuevo_rol,
+                            "activo": True
+                        }).execute()
+                        st.success(f"✅ Usuario {nuevo_nombre} creado")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+                else:
+                    st.warning("Completa todos los campos")
+
+        st.divider()
+        st.markdown("#### 🔑 Cambiar mi PIN")
+        with st.form("form_cambiar_pin"):
+            pin_actual  = st.text_input("PIN actual", type="password", max_chars=4)
+            pin_nuevo   = st.text_input("Nuevo PIN", type="password", max_chars=4)
+            pin_confirm = st.text_input("Confirmar nuevo PIN", type="password", max_chars=4)
+            cambiar_pin = st.form_submit_button("Cambiar PIN", use_container_width=True)
+
+        if cambiar_pin:
+            if pin_nuevo != pin_confirm:
+                st.error("Los PINs nuevos no coinciden")
+            elif pin_actual != usuario.get("pin",""):
+                st.error("PIN actual incorrecto")
+            elif len(pin_nuevo) < 4:
+                st.error("El PIN debe tener 4 dígitos")
+            else:
+                try:
+                    supabase.table("usuarios").update({"pin": pin_nuevo}).eq("id", usuario["id"]).execute()
+                    st.session_state["usuario_activo"]["pin"] = pin_nuevo
+                    st.success("✅ PIN actualizado correctamente")
+                except Exception as e:
+                    st.error(f"Error: {e}")

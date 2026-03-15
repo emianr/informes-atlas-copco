@@ -523,148 +523,329 @@ with tab1:
 
 # ════════════════════════════════════════════════
 # ════════════════════════════════════════════════
-# TAB 2 — GENERAR INFORME (nuevo formato PDF)
+# ════════════════════════════════════════════════
+# TAB 2 — GENERAR INFORME (wizard móvil)
 # ════════════════════════════════════════════════
 with tab2:
+
+    # CSS móvil
+    st.markdown("""
+    <style>
+    .paso-header {
+        background: linear-gradient(135deg, #005B8E, #0099CC);
+        border-radius: 12px; padding: 1rem 1.2rem;
+        margin-bottom: 1rem; color: white;
+    }
+    .paso-num {
+        font-size: 0.75rem; opacity: 0.8;
+        text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .paso-titulo {
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 1.4rem; font-weight: 700; margin-top: 2px;
+    }
+    .progreso-bar {
+        background: #2d3748; border-radius: 20px;
+        height: 6px; margin-bottom: 1.5rem; overflow: hidden;
+    }
+    .progreso-fill {
+        background: linear-gradient(90deg, #005B8E, #00A0C6);
+        height: 100%; border-radius: 20px;
+        transition: width 0.3s ease;
+    }
+    .equipo-card-sel {
+        background: linear-gradient(135deg, #1a1f2e, #0f3460);
+        border: 2px solid #0099CC; border-radius: 14px;
+        padding: 1.2rem; margin: 0.5rem 0 1rem 0;
+    }
+    .eq-modelo { font-family: Rajdhani,sans-serif; font-size: 1.5rem;
+                 font-weight: 700; color: #fff; }
+    .eq-info   { font-size: 0.85rem; color: #90cdf4; margin-top: 4px; }
+    .eq-serie  { font-size: 0.8rem; color: #718096; margin-top: 2px; }
+    .param-box {
+        background: #1a1f2e; border-radius: 10px;
+        padding: 0.8rem; border: 1px solid #2d3748;
+        margin-bottom: 0.5rem;
+    }
+    .resumen-row {
+        display: flex; justify-content: space-between;
+        padding: 0.5rem 0; border-bottom: 1px solid #2d3748;
+        font-size: 0.88rem;
+    }
+    .resumen-label { color: #718096; }
+    .resumen-val   { color: #e2e8f0; font-weight: 600; }
+    div[data-testid="stSelectbox"] > div,
+    div[data-testid="stTextInput"] > div > div > input,
+    div[data-testid="stNumberInput"] > div > div > input {
+        font-size: 1rem !important;
+        min-height: 48px !important;
+    }
+    div[data-testid="stFormSubmitButton"] > button {
+        min-height: 56px !important;
+        font-size: 1.1rem !important;
+        border-radius: 12px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     equipos_list = cargar_equipos()
     tags_list    = [e["tag"] for e in equipos_list]
 
-    st.markdown("### 📋 Nuevo Informe de Servicio")
+    # ── Estado del wizard ──
+    if "wizard_paso" not in st.session_state:
+        st.session_state["wizard_paso"] = 1
+    if "wizard_datos" not in st.session_state:
+        st.session_state["wizard_datos"] = {}
 
-    ct1, ct2 = st.columns(2)
-    with ct1:
-        tag_sel_inf = st.selectbox("TAG del equipo", tags_list, key="inf_tag")
-    with ct2:
-        tipo_orden_sel = st.selectbox("Tipo de Orden", ["INSPECCIÓN", "2.000 hrs", "4.000 hrs", "8.000 hrs", "16.000 hrs"])
+    paso   = st.session_state["wizard_paso"]
+    datos_w = st.session_state["wizard_datos"]
+    PASOS  = 4
 
-    eq_inf   = next((e for e in equipos_list if e["tag"] == tag_sel_inf), {})
-    mod_inf  = eq_inf.get("modelo", "")
-    ser_inf  = eq_inf.get("serie", "")
-    sub_inf  = eq_inf.get("subarea", "")
-    area_inf = eq_inf.get("area", "")
-    ubic_inf = eq_inf.get("ubicacion", "")
+    # ── Barra de progreso ──
+    pct = int((paso / PASOS) * 100)
+    pasos_labels = ["Equipo", "Técnicos", "Parámetros", "Confirmar"]
+    st.markdown(f"""
+    <div style='display:flex;justify-content:space-between;margin-bottom:6px;'>
+        {''.join([
+            f"<span style='font-size:0.75rem;color:{'#00A0C6' if i+1<=paso else '#4a5568'};font-weight:{'700' if i+1==paso else '400'}'>"
+            f"{'✓ ' if i+1<paso else ''}{l}</span>"
+            for i,l in enumerate(pasos_labels)
+        ])}
+    </div>
+    <div class='progreso-bar'>
+        <div class='progreso-fill' style='width:{pct}%'></div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.info(f"**{mod_inf}** | Serie: {ser_inf} | {sub_inf} | {area_inf} | {ubic_inf}")
+    # ════════════════════════════════
+    # PASO 1 — EQUIPO Y TIPO
+    # ════════════════════════════════
+    if paso == 1:
+        st.markdown("""
+        <div class='paso-header'>
+            <div class='paso-num'>Paso 1 de 4</div>
+            <div class='paso-titulo'>🏭 Seleccionar Equipo</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    try:
-        ur2 = supabase.table("historial").select("*").eq("tag", tag_sel_inf).order("creado_en", desc=True).limit(1).execute()
-        ult_inf2 = ur2.data[0] if ur2.data else None
-    except:
-        ult_inf2 = None
+        tag_p1 = st.selectbox(
+            "TAG del equipo",
+            tags_list,
+            index=tags_list.index(datos_w.get("tag", tags_list[0])) if datos_w.get("tag") in tags_list else 0,
+            key="p1_tag"
+        )
+        tipo_p1 = st.selectbox(
+            "Tipo de Orden",
+            ["INSPECCIÓN", "2.000 hrs", "4.000 hrs", "8.000 hrs", "16.000 hrs"],
+            index=["INSPECCIÓN","2.000 hrs","4.000 hrs","8.000 hrs","16.000 hrs"].index(datos_w.get("tipo_orden","INSPECCIÓN")) if datos_w.get("tipo_orden") else 0,
+            key="p1_tipo"
+        )
+        fecha_p1 = st.date_input("Fecha del servicio", datetime.now(), key="p1_fecha")
+        ot_p1    = st.text_input("Número OT", datos_w.get("orden_servicio",""), key="p1_ot",
+                                  placeholder="Ej: 4724006")
 
-    h_sug2 = int(ult_inf2["horas_marcha"]) if ult_inf2 else 0
+        eq = next((e for e in equipos_list if e["tag"] == tag_p1), {})
+        if eq:
+            st.markdown(f"""
+            <div class='equipo-card-sel'>
+                <div class='eq-modelo'>{eq.get('modelo','')} &nbsp;
+                    <span style='font-size:1rem;color:#48bb78;'>✓</span>
+                </div>
+                <div class='eq-info'>{eq.get('subarea','')} · {eq.get('area','')} · {eq.get('ubicacion','')}</div>
+                <div class='eq-serie'>Serie: {eq.get('serie','—')}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    st.divider()
+        if st.button("Siguiente →", key="p1_next", use_container_width=True, type="primary"):
+            st.session_state["wizard_datos"].update({
+                "tag": tag_p1, "tipo_orden": tipo_p1,
+                "fecha": fecha_p1.strftime("%d/%m/%Y"),
+                "fecha_obj": str(fecha_p1),
+                "orden_servicio": ot_p1,
+                "equipo_modelo": eq.get("modelo",""),
+                "serie": eq.get("serie",""),
+                "ubicacion": eq.get("subarea",""),
+                "planta": eq.get("ubicacion",""),
+                "area": eq.get("area",""),
+            })
+            st.session_state["wizard_paso"] = 2
+            st.rerun()
 
-    with st.form("form_informe_pdf"):
+    # ════════════════════════════════
+    # PASO 2 — TÉCNICOS
+    # ════════════════════════════════
+    elif paso == 2:
+        st.markdown("""
+        <div class='paso-header'>
+            <div class='paso-num'>Paso 2 de 4</div>
+            <div class='paso-titulo'>👷 Técnicos</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.markdown("**Datos Generales**")
-            fecha_inf    = st.date_input("Fecha", datetime.now(), key="fecha_inf")
-            ot_inf       = st.text_input("Número OT / Orden de Servicio", "")
-            contacto_inf = st.text_input("Contacto", st.secrets.get("contacto_default", "Pamela Arancibia"))
-        with col_b:
-            st.markdown("**Técnicos**")
-            tec1_inf = st.text_input("Técnico 1", st.secrets.get("tec1_default", "Ignacio Morales"))
-            tec2_inf = st.text_input("Técnico 2", st.secrets.get("tec2_default", "Emian Sanchez"))
-            horas_tec = st.text_input("Horas por técnico", "2")
+        tec1_p2   = st.text_input("Técnico 1 (Líder)", datos_w.get("tecnico_1", st.secrets.get("tec1_default","Ignacio Morales")), key="p2_t1")
+        tec2_p2   = st.text_input("Técnico 2", datos_w.get("tecnico_2", st.secrets.get("tec2_default","Emian Sanchez")), key="p2_t2")
+        horas_p2  = st.text_input("Horas trabajadas por técnico", datos_w.get("horas_1","2"), key="p2_hrs")
+        cont_p2   = st.text_input("Contacto cliente", datos_w.get("contacto", st.secrets.get("contacto_default","Pamela Arancibia")), key="p2_cont")
 
-        st.markdown("**Parámetros Operacionales**")
-        p1, p2, p3, p4 = st.columns(4)
-        with p1: nivel_aceite  = st.text_input("Nivel de aceite", "100%")
-        with p2: presion_sal   = st.text_input("Presión de Salida", "")
-        with p3: temp_elem     = st.text_input("Temp. salida elemento", "")
-        with p4: col_p1, col_p2 = st.columns(2)
-        with col_p1: banda_carga    = st.text_input("Banda carga", "")
-        with col_p2: banda_descarga = st.text_input("Banda descarga", "")
+        try:
+            ur2 = supabase.table("historial").select("horas_marcha").eq("tag", datos_w.get("tag","")).order("creado_en", desc=True).limit(1).execute()
+            h_prev = int(ur2.data[0]["horas_marcha"]) if ur2.data else 0
+        except:
+            h_prev = 0
 
-        st.markdown("**Datos del Equipo**")
-        e1, e2 = st.columns(2)
-        with e1:
-            modelo_edit = st.text_input("Modelo equipo", mod_inf)
-            serie_edit  = st.text_input("Número de Serie", ser_inf)
-            h_marcha_inf = st.number_input("Horas Marcha", value=h_sug2, step=1)
-        with e2:
-            ubicacion_edit  = st.text_input("Ubicación / Subárea", sub_inf if sub_inf else "")
-            planta_edit     = st.text_input("Planta / Área", ubic_inf if ubic_inf else "")
-            proximas_map = {
-                "INSPECCIÓN":  "Corresponde pauta de: [ 2.000 hrs ]",
-                "2.000 hrs":   "Corresponde pauta de: [ 4.000 hrs ]",
-                "4.000 hrs":   "Corresponde pauta de: [ 8.000 hrs ]",
-                "8.000 hrs":   "Corresponde pauta de: [ 16.000 hrs ]",
-                "16.000 hrs":  "Corresponde pauta de: [ 2.000 hrs ]",
-            }
-            proxima_visita  = st.text_input("Próxima Visita", proximas_map.get(tipo_orden_sel, ""))
+        h_marcha_p2 = st.number_input("Horas Marcha del equipo", value=h_prev, step=1, key="p2_hm")
 
-        st.markdown("**Comentarios del Informe**")
-        comentarios_default = (
-            f"Se realiza {tipo_orden_sel.lower()} programada.\n"
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("← Atrás", key="p2_back", use_container_width=True):
+                st.session_state["wizard_paso"] = 1
+                st.rerun()
+        with c2:
+            if st.button("Siguiente →", key="p2_next", use_container_width=True, type="primary"):
+                st.session_state["wizard_datos"].update({
+                    "tecnico_1": tec1_p2, "tecnico_2": tec2_p2,
+                    "horas_1": horas_p2, "contacto": cont_p2,
+                    "horas_marcha": str(h_marcha_p2),
+                })
+                st.session_state["wizard_paso"] = 3
+                st.rerun()
+
+    # ════════════════════════════════
+    # PASO 3 — PARÁMETROS
+    # ════════════════════════════════
+    elif paso == 3:
+        st.markdown("""
+        <div class='paso-header'>
+            <div class='paso-num'>Paso 3 de 4</div>
+            <div class='paso-titulo'>⚙️ Parámetros Operacionales</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        nivel_p3   = st.text_input("Nivel de aceite", datos_w.get("nivel_aceite","100%"), key="p3_ace", placeholder="100%")
+        presion_p3 = st.text_input("Presión de Salida", datos_w.get("presion_salida",""), key="p3_pres", placeholder="Ej: 92 psi")
+        temp_p3    = st.text_input("Temp. salida elemento", datos_w.get("temp_elemento",""), key="p3_temp", placeholder="Ej: 7°C")
+
+        st.markdown("**Banda de presión**")
+        bc1, bc2 = st.columns(2)
+        with bc1: bcarga_p3  = st.text_input("Carga", datos_w.get("banda_carga",""), key="p3_bc", placeholder="Ej: 76 psi")
+        with bc2: bdesc_p3   = st.text_input("Descarga", datos_w.get("banda_descarga",""), key="p3_bd", placeholder="Ej: 94 psi")
+
+        st.markdown("**Comentarios**")
+        tipo_actual = datos_w.get("tipo_orden","INSPECCIÓN")
+        _tipo_lower = tipo_actual.lower()
+        coment_default = datos_w.get("comentarios", (
+            "Se realiza " + _tipo_lower + " programada.\n"
             "Se chequea parámetros en módulo de control óptimos.\n"
             "Se chequea existencia de fugas y filtraciones. Sin observaciones\n"
             "Se chequea carrocería. Sin observaciones\n"
             "Se realizan pruebas operacionales en carga y descarga de equipo, "
             "operando de forma óptima según configuración en módulo de control.\n"
             "Equipo operativo."
-        )
-        comentarios_inf = st.text_area("Comentarios", value=comentarios_default, height=130)
+        ))
+        coment_p3 = st.text_area("", value=coment_default, height=150, key="p3_com")
 
-        st.divider()
-        enviar_pdf = st.form_submit_button("📄 GENERAR Y DESCARGAR PDF", use_container_width=True)
+        proximas_map = {
+            "INSPECCIÓN": "Corresponde pauta de: [ 2.000 hrs ]",
+            "2.000 hrs":  "Corresponde pauta de: [ 4.000 hrs ]",
+            "4.000 hrs":  "Corresponde pauta de: [ 8.000 hrs ]",
+            "8.000 hrs":  "Corresponde pauta de: [ 16.000 hrs ]",
+            "16.000 hrs": "Corresponde pauta de: [ 2.000 hrs ]",
+        }
+        prox_p3 = st.text_input("Próxima Visita", datos_w.get("proxima_visita", proximas_map.get(tipo_actual,"")), key="p3_prox")
 
-    if enviar_pdf:
-        try:
-            from generar_informe_pdf import generar_pdf, ACTIVIDADES_DEFAULT
-            fecha_str = fecha_inf.strftime("%d/%m/%Y")
-            datos_pdf = {
-                "fecha":          fecha_str,
-                "contacto":       contacto_inf,
-                "tag":            tag_sel_inf,
-                "equipo_modelo":  modelo_edit,
-                "serie":          serie_edit,
-                "ubicacion":      ubicacion_edit,
-                "planta":         planta_edit,
-                "nivel_aceite":   nivel_aceite,
-                "presion_salida": presion_sal,
-                "temp_elemento":  temp_elem,
-                "banda_carga":    banda_carga,
-                "banda_descarga": banda_descarga,
-                "comentarios":    comentarios_inf,
-                "tecnico_1":      tec1_inf,
-                "tecnico_2":      tec2_inf,
-                "horas_1":        horas_tec,
-                "horas_marcha":   str(h_marcha_inf),
-                "orden_servicio": ot_inf,
-                "tipo_orden":     tipo_orden_sel,
-                "proxima_visita": proxima_visita,
-                "actividades":    ACTIVIDADES_DEFAULT,
-            }
-            pdf_bytes = generar_pdf(datos_pdf)
-            nombre_pdf = f"Informe_{tipo_orden_sel}_{tag_sel_inf}_{fecha_inf}.pdf"
-
-            with st.spinner("Guardando registro..."):
-                rid = guardar_registro({
-                    "fecha": str(fecha_inf), "tag": tag_sel_inf, "tipo": tipo_orden_sel,
-                    "horas_marcha": h_marcha_inf, "horas_carga": 0,
-                    "tecnico_1": tec1_inf, "tecnico_2": tec2_inf, "contacto": contacto_inf,
-                    "p_carga": banda_carga, "p_descarga": banda_descarga, "temp_salida": temp_elem,
-                    "alcance": comentarios_inf[:500], "actividades": "", "condicion": "", "recomendaciones": "",
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("← Atrás", key="p3_back", use_container_width=True):
+                st.session_state["wizard_paso"] = 2
+                st.rerun()
+        with c2:
+            if st.button("Siguiente →", key="p3_next", use_container_width=True, type="primary"):
+                st.session_state["wizard_datos"].update({
+                    "nivel_aceite": nivel_p3, "presion_salida": presion_p3,
+                    "temp_elemento": temp_p3, "banda_carga": bcarga_p3,
+                    "banda_descarga": bdesc_p3, "comentarios": coment_p3,
+                    "proxima_visita": prox_p3,
                 })
-                if rid:
-                    guardar_informe_storage(rid, nombre_pdf, pdf_bytes)
+                st.session_state["wizard_paso"] = 4
+                st.rerun()
 
-            st.success(f"✅ Informe generado — {tipo_orden_sel} | {tag_sel_inf} | {fecha_str}")
-            st.download_button(
-                "📥 DESCARGAR PDF",
-                pdf_bytes,
-                nombre_pdf,
-                mime="application/pdf",
-                use_container_width=True
-            )
-        except Exception as e:
-            st.error(f"Error generando PDF: {e}")
-            import traceback
-            st.code(traceback.format_exc())
+    # ════════════════════════════════
+    # PASO 4 — RESUMEN Y GENERAR
+    # ════════════════════════════════
+    elif paso == 4:
+        st.markdown("""
+        <div class='paso-header'>
+            <div class='paso-num'>Paso 4 de 4</div>
+            <div class='paso-titulo'>✅ Confirmar y Generar</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        d = datos_w
+        st.markdown(f"""
+        <div style='background:#1a1f2e;border-radius:12px;padding:1.2rem;border:1px solid #2d3748;margin-bottom:1rem;'>
+            <div style='font-size:0.7rem;color:#718096;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.8rem'>Resumen del Informe</div>
+            <div class='resumen-row'><span class='resumen-label'>Equipo</span><span class='resumen-val'>{d.get('tag','')} — {d.get('equipo_modelo','')}</span></div>
+            <div class='resumen-row'><span class='resumen-label'>Tipo de Orden</span><span class='resumen-val'>{d.get('tipo_orden','')}</span></div>
+            <div class='resumen-row'><span class='resumen-label'>Fecha</span><span class='resumen-val'>{d.get('fecha','')}</span></div>
+            <div class='resumen-row'><span class='resumen-label'>OT</span><span class='resumen-val'>{d.get('orden_servicio','—')}</span></div>
+            <div class='resumen-row'><span class='resumen-label'>Técnico 1</span><span class='resumen-val'>{d.get('tecnico_1','')}</span></div>
+            <div class='resumen-row'><span class='resumen-label'>Técnico 2</span><span class='resumen-val'>{d.get('tecnico_2','')}</span></div>
+            <div class='resumen-row'><span class='resumen-label'>Horas Marcha</span><span class='resumen-val'>{d.get('horas_marcha','')}</span></div>
+            <div class='resumen-row'><span class='resumen-label'>Nivel aceite</span><span class='resumen-val'>{d.get('nivel_aceite','')}</span></div>
+            <div class='resumen-row'><span class='resumen-label'>Presión salida</span><span class='resumen-val'>{d.get('presion_salida','')}</span></div>
+            <div class='resumen-row'><span class='resumen-label'>Temp. elemento</span><span class='resumen-val'>{d.get('temp_elemento','')}</span></div>
+            <div class='resumen-row'><span class='resumen-label'>Banda carga/desc.</span><span class='resumen-val'>{d.get('banda_carga','')} / {d.get('banda_descarga','')}</span></div>
+            <div class='resumen-row' style='border:none'><span class='resumen-label'>Próxima visita</span><span class='resumen-val'>{d.get('proxima_visita','')}</span></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("← Atrás", key="p4_back", use_container_width=True):
+                st.session_state["wizard_paso"] = 3
+                st.rerun()
+        with c2:
+            if st.button("🔄 Nuevo informe", key="p4_nuevo", use_container_width=True):
+                st.session_state["wizard_paso"] = 1
+                st.session_state["wizard_datos"] = {}
+                st.rerun()
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        if st.button("📄 GENERAR PDF", key="p4_generar", use_container_width=True, type="primary"):
+            try:
+                from generar_informe_pdf import generar_pdf, ACTIVIDADES_DEFAULT
+                datos_pdf = {**d, "actividades": ACTIVIDADES_DEFAULT}
+                pdf_bytes = generar_pdf(datos_pdf)
+                nombre_pdf = f"Informe_{d.get('tipo_orden','INS')}_{d.get('tag','')}_{d.get('fecha_obj','')}.pdf"
+
+                with st.spinner("Guardando..."):
+                    rid = guardar_registro({
+                        "fecha": d.get("fecha_obj",""), "tag": d.get("tag",""),
+                        "tipo": d.get("tipo_orden",""), "horas_marcha": int(d.get("horas_marcha",0)),
+                        "horas_carga": 0, "tecnico_1": d.get("tecnico_1",""),
+                        "tecnico_2": d.get("tecnico_2",""), "contacto": d.get("contacto",""),
+                        "p_carga": d.get("banda_carga",""), "p_descarga": d.get("banda_descarga",""),
+                        "temp_salida": d.get("temp_elemento",""),
+                        "alcance": d.get("comentarios","")[:500],
+                        "actividades": "", "condicion": "", "recomendaciones": "",
+                    })
+                    if rid:
+                        guardar_informe_storage(rid, nombre_pdf, pdf_bytes)
+
+                st.success(f"✅ Informe generado — {d.get('tipo_orden','')} | {d.get('tag','')} | {d.get('fecha','')}")
+                st.download_button(
+                    "📥 DESCARGAR PDF",
+                    pdf_bytes, nombre_pdf,
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.error(f"Error: {e}")
+                import traceback
+                st.code(traceback.format_exc())
+
+
 
 # TAB 3 — HISTORIAL
 # ════════════════════════════════════════════════

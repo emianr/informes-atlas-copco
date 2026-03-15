@@ -1092,9 +1092,17 @@ with tab_ot:
             st.success(f"✅ Excel leído — {len(df)} OTs encontradas")
 
             # Guardar en session_state para que no se pierda al presionar botón
-            import json
-            st.session_state["ot_df_json"] = df.to_json()
+            st.session_state["ot_df_json"] = df.to_json(date_format='iso')
             st.session_state["ot_col_map"] = col_map
+
+            # Detectar semana del Excel para pre-llenar el filtro
+            fi_col = col_map.get("fecha_inicio")
+            if fi_col and fi_col in df.columns:
+                try:
+                    primera_fecha = pd.to_datetime(df[fi_col].dropna().iloc[0])
+                    st.session_state["ot_semana_importada"] = primera_fecha.strftime("%Y-W%V")
+                except:
+                    pass
 
             # Parsear tipo de trabajo y equipo desde descripción
             def parsear_descripcion(desc):
@@ -1146,6 +1154,23 @@ with tab_ot:
             if preview_data:
                 import pandas as _pd2
                 st.dataframe(_pd2.DataFrame(preview_data), hide_index=True, use_container_width=True)
+            
+            # Mostrar semana detectada
+            _primera_fecha = None
+            for _, _r in df.head(3).iterrows():
+                _f = _r.get(col_map.get("fecha_inicio",""), None)
+                if _f is not None:
+                    try:
+                        import pandas as _pdx
+                        if _pdx.notna(_f):
+                            _primera_fecha = _pdx.to_datetime(_f)
+                            break
+                    except:
+                        pass
+            if _primera_fecha:
+                _semana_det = _primera_fecha.strftime("%Y-W%V")
+                st.info(f"📅 Semana detectada: **{_semana_det}** — asegúrate de buscar esta semana abajo")
+                st.session_state["ot_semana_detectada"] = _semana_det
 
             col_imp1, col_imp2 = st.columns(2)
             with col_imp1:
@@ -1154,68 +1179,86 @@ with tab_ot:
                 importar_btn = st.button("📥 IMPORTAR OTs", use_container_width=True, type="primary", key="ot_importar_btn")
 
             if importar_btn:
-                import pandas as _pd3, json as _json
-                df_import = _pd3.read_json(st.session_state.get("ot_df_json", "{}"))
-                col_map_imp = st.session_state.get("ot_col_map", col_map)
-                importadas = 0
-                errores = 0
-                with st.spinner("Importando OTs..."):
-                    for _, row in df_import.iterrows():
+                import pandas as _pd3, io as _io
+                _df_json = st.session_state.get("ot_df_json", "")
+                if not _df_json:
+                    st.error("❌ No hay datos. Vuelve a subir el Excel.")
+                else:
+                    _df_imp = _pd3.read_json(_io.StringIO(_df_json))
+                    _cm = st.session_state.get("ot_col_map", {})
+                    _ok = 0
+                    _err = 0
+
+                    def _safe_date(d):
+                        try: return _pd3.to_datetime(d).strftime("%Y-%m-%d") if _pd3.notna(d) else None
+                        except: return None
+
+                    def _safe_num(v):
+                        try: return float(v) if _pd3.notna(v) else 0
+                        except: return 0
+
+                    def _tipo(desc):
+                        d = str(desc).lower()
+                        for h in ["16000","8000","4000","2000"]:
+                            if h in d: return f"mantencion_{h}hrs"
+                        if "mant" in d: return "mantencion"
+                        if "mec" in d: return "mecanico"
+                        return "inspeccion"
+
+                    def _estado(obs):
+                        o = str(obs).lower() if _pd3.notna(obs) else ""
+                        if "atrasad" in o: return "atrasado"
+                        if "cerrar" in o or "cerrado" in o: return "completado"
+                        return "pendiente"
+
+                    def _semana(fecha):
                         try:
-                            ot_num = str(row.get(col_map_imp.get("ot",""), "")).strip()
-                            if not ot_num or not ot_num.isdigit():
-                                continue
-                            desc = str(row.get(col_map_imp.get("descripcion",""), ""))
-                            _obs_raw = row.get(col_map_imp.get("obs",""), "")
-                            obs  = str(_obs_raw) if _pd3.notna(_obs_raw) else ""
-                            fi   = row.get(col_map_imp.get("fecha_inicio",""), None)
-                            ff   = row.get(col_map_imp.get("fecha_fin",""), None)
+                            if _pd3.notna(fecha): return _pd3.to_datetime(fecha).strftime("%Y-W%V")
+                        except: pass
+                        return semana_actual
 
-                            def safe_date(d):
-                                try:
-                                    return pd.to_datetime(d).strftime("%Y-%m-%d") if pd.notna(d) else None
-                                except:
-                                    return None
+                    with st.spinner(f"Importando {len(_df_imp)} OTs..."):
+                        for _, row in _df_imp.iterrows():
+                            try:
+                                ot_num = str(row.get(_cm.get("ot",""), "")).strip()
+                                if not ot_num or not ot_num.isdigit():
+                                    continue
+                                desc = str(row.get(_cm.get("descripcion",""), ""))
+                                obs_r = row.get(_cm.get("obs",""), "")
+                                obs   = str(obs_r) if _pd3.notna(obs_r) else ""
+                                fi    = row.get(_cm.get("fecha_inicio",""), None)
+                                ff    = row.get(_cm.get("fecha_fin",""), None)
+                                reg = {
+                                    "centro":       str(row.get(_cm.get("centro",""), "")),
+                                    "wbs":          str(row.get(_cm.get("wbs",""), "")),
+                                    "descripcion":  desc,
+                                    "plan":         str(row.get(_cm.get("plan",""), "")),
+                                    "ot":           ot_num,
+                                    "obs":          obs,
+                                    "fecha_inicio": _safe_date(fi),
+                                    "fecha_fin":    _safe_date(ff),
+                                    "horas_lu":     _safe_num(row.get(_cm.get("lu",""), 0)),
+                                    "horas_ma":     _safe_num(row.get(_cm.get("ma",""), 0)),
+                                    "horas_mi":     _safe_num(row.get(_cm.get("mi",""), 0)),
+                                    "horas_ju":     _safe_num(row.get(_cm.get("ju",""), 0)),
+                                    "horas_vi":     _safe_num(row.get(_cm.get("vi",""), 0)),
+                                    "horas_sa":     _safe_num(row.get(_cm.get("sa",""), 0)),
+                                    "horas_do":     _safe_num(row.get(_cm.get("do",""), 0)),
+                                    "estado":       _estado(obs_r),
+                                    "tipo_trabajo": _tipo(desc),
+                                    "semana":       _semana(fi),
+                                }
+                                if st.session_state.get("ot_sobrescribir", False):
+                                    supabase.table("ots").upsert(reg, on_conflict="ot").execute()
+                                else:
+                                    supabase.table("ots").insert(reg).execute()
+                                _ok += 1
+                            except:
+                                _err += 1
 
-                            def safe_num(v):
-                                try:
-                                    return float(v) if pd.notna(v) else 0
-                                except:
-                                    return 0
-
-                            registro = {
-                                "centro":       str(row.get(col_map_imp.get("centro",""), "")),
-                                "wbs":          str(row.get(col_map_imp.get("wbs",""), "")),
-                                "descripcion":  desc,
-                                "plan":         str(row.get(col_map_imp.get("plan",""), "")),
-                                "ot":           ot_num,
-                                "obs":          obs,
-                                "fecha_inicio": safe_date(fi),
-                                "fecha_fin":    safe_date(ff),
-                                "horas_lu":     safe_num(row.get(col_map_imp.get("lu",""), 0)),
-                                "horas_ma":     safe_num(row.get(col_map_imp.get("ma",""), 0)),
-                                "horas_mi":     safe_num(row.get(col_map_imp.get("mi",""), 0)),
-                                "horas_ju":     safe_num(row.get(col_map_imp.get("ju",""), 0)),
-                                "horas_vi":     safe_num(row.get(col_map_imp.get("vi",""), 0)),
-                                "horas_sa":     safe_num(row.get(col_map_imp.get("sa",""), 0)),
-                                "horas_do":     safe_num(row.get(col_map_imp.get("do",""), 0)),
-                                "estado":       detectar_estado(obs),
-                                "tipo_trabajo": parsear_descripcion(desc),
-                                "semana":       get_semana(fi),
-                            }
-
-                            if st.session_state.get("ot_sobrescribir", False):
-                                supabase.table("ots").upsert(registro, on_conflict="ot").execute()
-                            else:
-                                supabase.table("ots").insert(registro).execute()
-                            importadas += 1
-                        except Exception as ex:
-                            errores += 1
-
-                st.success(f"✅ {importadas} OTs importadas correctamente")
-                if errores:
-                    st.warning(f"⚠️ {errores} filas con error (OTs duplicadas o datos inválidos)")
-                st.rerun()
+                    st.success(f"✅ {_ok} OTs importadas correctamente")
+                    if _err: st.warning(f"⚠️ {_err} filas con error (duplicadas o datos inválidos)")
+                    st.rerun()
 
         except Exception as e:
             st.error(f"Error leyendo Excel: {e}")
@@ -1229,7 +1272,9 @@ with tab_ot:
 
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
-        semana_ver = st.text_input("Semana", value=semana_actual, placeholder="2026-W11")
+        # Usar semana del Excel importado si está disponible
+        semana_default = st.session_state.get("ot_semana_importada", semana_actual)
+        semana_ver = st.text_input("Semana", value=semana_default, placeholder="2026-W11")
     with col_f2:
         filtro_estado = st.selectbox("Estado", ["Todos","pendiente","completado","atrasado"], key="ot_fest")
     with col_f3:

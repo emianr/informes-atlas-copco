@@ -753,6 +753,24 @@ with tab2:
         }
         prox_p3 = st.text_input("Próxima Visita", datos_w.get("proxima_visita", proximas_map.get(tipo_actual,"")), key="p3_prox")
 
+        # ── Fotos opcionales ──
+        st.markdown("**📷 Registro Fotográfico** *(opcional)*")
+        st.caption("Puedes agregar hasta 2 fotos desde tu cámara o galería")
+        fc1, fc2 = st.columns(2)
+        with fc1:
+            foto1_p3 = st.file_uploader("Foto 1", type=["jpg","jpeg","png"],
+                                         key="p3_foto1", label_visibility="collapsed",
+                                         help="Foto 1 del equipo")
+            st.caption("Foto 1")
+        with fc2:
+            foto2_p3 = st.file_uploader("Foto 2", type=["jpg","jpeg","png"],
+                                         key="p3_foto2", label_visibility="collapsed",
+                                         help="Foto 2 del equipo")
+            st.caption("Foto 2")
+
+        if foto1_p3 or foto2_p3:
+            st.success(f"✅ {sum(1 for f in [foto1_p3,foto2_p3] if f)} foto(s) cargada(s)")
+
         c1, c2 = st.columns(2)
         with c1:
             if st.button("← Atrás", key="p3_back", use_container_width=True):
@@ -760,11 +778,21 @@ with tab2:
                 st.rerun()
         with c2:
             if st.button("Siguiente →", key="p3_next", use_container_width=True, type="primary"):
+                # Guardar fotos como bytes en session_state
+                foto1_bytes = foto1_p3.read() if foto1_p3 else None
+                foto2_bytes = foto2_p3.read() if foto2_p3 else None
+                st.session_state["wizard_fotos"] = {
+                    "foto1": foto1_bytes,
+                    "foto2": foto2_bytes,
+                    "foto1_nombre": foto1_p3.name if foto1_p3 else None,
+                    "foto2_nombre": foto2_p3.name if foto2_p3 else None,
+                }
                 st.session_state["wizard_datos"].update({
                     "nivel_aceite": nivel_p3, "presion_salida": presion_p3,
                     "temp_elemento": temp_p3, "banda_carga": bcarga_p3,
                     "banda_descarga": bdesc_p3, "comentarios": coment_p3,
                     "proxima_visita": prox_p3,
+                    "tiene_fotos": bool(foto1_bytes or foto2_bytes),
                 })
                 st.session_state["wizard_paso"] = 4
                 st.rerun()
@@ -796,6 +824,7 @@ with tab2:
             <div class='resumen-row'><span class='resumen-label'>Temp. elemento</span><span class='resumen-val'>{d.get('temp_elemento','')}</span></div>
             <div class='resumen-row'><span class='resumen-label'>Banda carga/desc.</span><span class='resumen-val'>{d.get('banda_carga','')} / {d.get('banda_descarga','')}</span></div>
             <div class='resumen-row' style='border:none'><span class='resumen-label'>Próxima visita</span><span class='resumen-val'>{d.get('proxima_visita','')}</span></div>
+            <div class='resumen-row' style='border:none'><span class='resumen-label'>Fotos</span><span class='resumen-val'>{'✅ Incluidas' if d.get('tiene_fotos') else '— Sin fotos'}</span></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -815,7 +844,13 @@ with tab2:
         if st.button("📄 GENERAR PDF", key="p4_generar", use_container_width=True, type="primary"):
             try:
                 from generar_informe_pdf import generar_pdf, ACTIVIDADES_DEFAULT
-                datos_pdf = {**d, "actividades": ACTIVIDADES_DEFAULT}
+                fotos_w = st.session_state.get("wizard_fotos", {})
+                datos_pdf = {
+                    **d,
+                    "actividades": ACTIVIDADES_DEFAULT,
+                    "foto1_bytes": fotos_w.get("foto1"),
+                    "foto2_bytes": fotos_w.get("foto2"),
+                }
                 pdf_bytes = generar_pdf(datos_pdf)
                 nombre_pdf = f"Informe_{d.get('tipo_orden','INS')}_{d.get('tag','')}_{d.get('fecha_obj','')}.pdf"
 

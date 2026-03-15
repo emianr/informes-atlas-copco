@@ -437,16 +437,17 @@ with col_user:
         st.session_state["wizard_datos"] = {}
         st.rerun()
 
-tabs_list = ["🏭 Equipos", "📋 Generar Informe", "📊 Historial", "📁 Informes", "👤 Mi Perfil"]
+tabs_list = ["🏭 Equipos", "📋 Generar Informe", "📅 OT Semanal", "📊 Historial", "📁 Informes", "👤 Mi Perfil"]
 if usuario.get("rol") in ["admin", "supervisor"]:
     tabs_list.append("👥 Usuarios")
 _tabs = st.tabs(tabs_list)
 tab1 = _tabs[0]
 tab2 = _tabs[1]
-tab3 = _tabs[2]
-tab4 = _tabs[3]
-tab_perfil = _tabs[4]
-tab5 = _tabs[5] if len(_tabs) > 5 else None
+tab_ot = _tabs[2]
+tab3 = _tabs[3]
+tab4 = _tabs[4]
+tab_perfil = _tabs[5]
+tab5 = _tabs[6] if len(_tabs) > 6 else None
 
 # ════════════════════════════════════════════════
 # TAB 1 — EQUIPOS
@@ -989,6 +990,340 @@ with tab2:
 
 
 
+# ════════════════════════════════════════════════
+# TAB OT SEMANAL — Consolidado OTs
+# ════════════════════════════════════════════════
+with tab_ot:
+    st.markdown("### 📅 Consolidado OT Semanal")
+
+    # CSS semáforo y tabla
+    st.markdown("""
+    <style>
+    .ot-card {
+        background:#1a1f2e; border-radius:10px;
+        padding:0.8rem 1rem; margin-bottom:0.4rem;
+        border-left:4px solid #2d3748;
+        border:1px solid #2d3748;
+    }
+    .ot-desc { font-size:0.88rem; color:#e2e8f0; font-weight:500; }
+    .ot-meta { font-size:0.75rem; color:#718096; margin-top:3px; }
+    .ot-obs  { font-size:0.75rem; color:#f6ad55; margin-top:2px; }
+    .badge-pend  { background:rgba(246,173,85,0.15);  color:#f6ad55; border:1px solid rgba(246,173,85,0.3);  border-radius:20px; padding:2px 10px; font-size:0.7rem; font-weight:600; }
+    .badge-comp  { background:rgba(72,187,120,0.15);  color:#48bb78; border:1px solid rgba(72,187,120,0.3);  border-radius:20px; padding:2px 10px; font-size:0.7rem; font-weight:600; }
+    .badge-atras { background:rgba(245,101,101,0.15); color:#f56565; border:1px solid rgba(245,101,101,0.3); border-radius:20px; padding:2px 10px; font-size:0.7rem; font-weight:600; }
+    .dia-header { font-family:Rajdhani,sans-serif; font-size:1.1rem; font-weight:700;
+                  color:#90cdf4; border-bottom:1px solid #2d3748; padding-bottom:4px; margin:1rem 0 0.5rem 0; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ── Subir Excel ──
+    col_up, col_semana = st.columns([2, 1])
+    with col_up:
+        archivo_xl = st.file_uploader(
+            "📂 Subir consolidado Excel (.xlsx)",
+            type=["xlsx", "xls"],
+            help="Sube el consolidado semanal de OTs"
+        )
+    with col_semana:
+        from datetime import datetime as _dt3, timedelta
+        hoy = _dt3.now()
+        semana_actual = hoy.strftime("%Y-W%V")
+        st.markdown(f"""
+        <div style='background:#1a1f2e;border-radius:10px;padding:0.8rem 1rem;
+             border:1px solid #2d3748;margin-top:1.6rem;'>
+            <div style='font-size:0.7rem;color:#718096;text-transform:uppercase;'>Semana actual</div>
+            <div style='font-family:Rajdhani,sans-serif;font-size:1.3rem;
+                 font-weight:700;color:#90cdf4;'>{semana_actual}</div>
+            <div style='font-size:0.75rem;color:#4a5568;'>
+                {(hoy - timedelta(days=hoy.weekday())).strftime("%d/%m")} — 
+                {(hoy - timedelta(days=hoy.weekday()) + timedelta(days=6)).strftime("%d/%m/%Y")}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    if archivo_xl:
+        try:
+            import pandas as pd
+            import re
+
+            df = pd.read_excel(archivo_xl, header=None)
+
+            # Encontrar fila de encabezado buscando "Centro" o "Task description"
+            header_row = None
+            for i, row in df.iterrows():
+                row_vals = [str(v).strip().lower() for v in row.values if pd.notna(v)]
+                if any("centro" in v for v in row_vals) or any("task" in v for v in row_vals):
+                    header_row = i
+                    break
+
+            if header_row is None:
+                header_row = 0
+
+            df.columns = df.iloc[header_row]
+            df = df.iloc[header_row+1:].reset_index(drop=True)
+            df.columns = [str(c).strip() if pd.notna(c) else f"col_{i}" for i, c in enumerate(df.columns)]
+
+            # Mapear columnas flexiblemente
+            col_map = {}
+            for col in df.columns:
+                cl = str(col).lower().strip()
+                if "centro" in cl:           col_map["centro"] = col
+                elif "wbs" in cl:            col_map["wbs"] = col
+                elif "task" in cl or "desc" in cl: col_map["descripcion"] = col
+                elif "plan" in cl:           col_map["plan"] = col
+                elif cl == "ot":             col_map["ot"] = col
+                elif "obs" in cl:            col_map["obs"] = col
+                elif "start" in cl:          col_map["fecha_inicio"] = col
+                elif "finish" in cl:         col_map["fecha_fin"] = col
+                elif cl in ["lu","lun"]:     col_map["lu"] = col
+                elif cl in ["ma","mar"]:     col_map["ma"] = col
+                elif cl in ["mi","mie","mié"]: col_map["mi"] = col
+                elif cl in ["ju","jue"]:     col_map["ju"] = col
+                elif cl in ["vi","vie"]:     col_map["vi"] = col
+                elif cl in ["sa","sab","sáb"]: col_map["sa"] = col
+                elif cl in ["do","dom"]:     col_map["do"] = col
+
+            # Filtrar filas válidas (que tengan OT numérico)
+            ot_col = col_map.get("ot")
+            if ot_col:
+                df = df[df[ot_col].notna()]
+                df = df[df[ot_col].astype(str).str.match(r'^\d+$')]
+
+            st.success(f"✅ Excel leído — {len(df)} OTs encontradas")
+
+            # Parsear tipo de trabajo y equipo desde descripción
+            def parsear_descripcion(desc):
+                desc = str(desc)
+                tipo = "inspeccion"
+                if "mant" in desc.lower() or "4000" in desc or "2000" in desc or "8000" in desc:
+                    tipo = "mantencion"
+                elif "mec" in desc.lower() or "mecánico" in desc.lower():
+                    tipo = "mecanico"
+
+                # Detectar horas de mantención
+                for hrs in ["16000","8000","4000","2000"]:
+                    if hrs in desc:
+                        tipo = f"mantencion_{hrs}hrs"
+                        break
+                return tipo
+
+            def detectar_estado(obs):
+                obs = str(obs).lower() if pd.notna(obs) else ""
+                if "atrasad" in obs:
+                    return "atrasado"
+                elif "cerrar" in obs or "cerrado" in obs:
+                    return "completado"
+                return "pendiente"
+
+            # Construir semana desde fecha inicio
+            def get_semana(fecha):
+                try:
+                    if pd.notna(fecha):
+                        return pd.to_datetime(fecha).strftime("%Y-W%V")
+                except:
+                    pass
+                return semana_actual
+
+            # Preview antes de importar
+            st.markdown("#### Vista previa (primeras 5 OTs)")
+            preview_data = []
+            for _, row in df.head(5).iterrows():
+                desc = row.get(col_map.get("descripcion",""), "")
+                ot_n = row.get(col_map.get("ot",""), "")
+                fi   = row.get(col_map.get("fecha_inicio",""), "")
+                obs  = row.get(col_map.get("obs",""), "")
+                preview_data.append({
+                    "OT": str(ot_n),
+                    "Descripción": str(desc)[:60],
+                    "Inicio": str(fi)[:10],
+                    "Estado": detectar_estado(obs)
+                })
+            if preview_data:
+                import pandas as _pd2
+                st.dataframe(_pd2.DataFrame(preview_data), hide_index=True, use_container_width=True)
+
+            col_imp1, col_imp2 = st.columns(2)
+            with col_imp1:
+                sobrescribir = st.checkbox("Sobrescribir OTs existentes de esta semana", value=False)
+            with col_imp2:
+                importar_btn = st.button("📥 IMPORTAR OTs", use_container_width=True, type="primary")
+
+            if importar_btn:
+                importadas = 0
+                errores = 0
+                with st.spinner("Importando OTs..."):
+                    for _, row in df.iterrows():
+                        try:
+                            ot_num = str(row.get(col_map.get("ot",""), "")).strip()
+                            if not ot_num or not ot_num.isdigit():
+                                continue
+                            desc = str(row.get(col_map.get("descripcion",""), ""))
+                            obs  = str(row.get(col_map.get("obs",""), "")) if pd.notna(row.get(col_map.get("obs",""), "")) else ""
+                            fi   = row.get(col_map.get("fecha_inicio",""), None)
+                            ff   = row.get(col_map.get("fecha_fin",""), None)
+
+                            def safe_date(d):
+                                try:
+                                    return pd.to_datetime(d).strftime("%Y-%m-%d") if pd.notna(d) else None
+                                except:
+                                    return None
+
+                            def safe_num(v):
+                                try:
+                                    return float(v) if pd.notna(v) else 0
+                                except:
+                                    return 0
+
+                            registro = {
+                                "centro":       str(row.get(col_map.get("centro",""), "")),
+                                "wbs":          str(row.get(col_map.get("wbs",""), "")),
+                                "descripcion":  desc,
+                                "plan":         str(row.get(col_map.get("plan",""), "")),
+                                "ot":           ot_num,
+                                "obs":          obs,
+                                "fecha_inicio": safe_date(fi),
+                                "fecha_fin":    safe_date(ff),
+                                "horas_lu":     safe_num(row.get(col_map.get("lu",""), 0)),
+                                "horas_ma":     safe_num(row.get(col_map.get("ma",""), 0)),
+                                "horas_mi":     safe_num(row.get(col_map.get("mi",""), 0)),
+                                "horas_ju":     safe_num(row.get(col_map.get("ju",""), 0)),
+                                "horas_vi":     safe_num(row.get(col_map.get("vi",""), 0)),
+                                "horas_sa":     safe_num(row.get(col_map.get("sa",""), 0)),
+                                "horas_do":     safe_num(row.get(col_map.get("do",""), 0)),
+                                "estado":       detectar_estado(obs),
+                                "tipo_trabajo": parsear_descripcion(desc),
+                                "semana":       get_semana(fi),
+                            }
+
+                            if sobrescribir:
+                                supabase.table("ots").upsert(registro, on_conflict="ot").execute()
+                            else:
+                                supabase.table("ots").insert(registro).execute()
+                            importadas += 1
+                        except Exception as ex:
+                            errores += 1
+
+                st.success(f"✅ {importadas} OTs importadas correctamente")
+                if errores:
+                    st.warning(f"⚠️ {errores} filas con error (OTs duplicadas o datos inválidos)")
+                st.rerun()
+
+        except Exception as e:
+            st.error(f"Error leyendo Excel: {e}")
+            import traceback
+            st.code(traceback.format_exc())
+
+    st.divider()
+
+    # ── Ver OTs por semana ──
+    st.markdown("#### 📋 OTs de la semana")
+
+    col_f1, col_f2, col_f3 = st.columns(3)
+    with col_f1:
+        semana_ver = st.text_input("Semana", value=semana_actual, placeholder="2026-W11")
+    with col_f2:
+        filtro_estado = st.selectbox("Estado", ["Todos","pendiente","completado","atrasado"], key="ot_fest")
+    with col_f3:
+        filtro_centro = st.selectbox("Centro", ["Todos","CE01","CE02"], key="ot_fcen")
+
+    try:
+        q = supabase.table("ots").select("*").eq("semana", semana_ver)
+        if filtro_estado != "Todos":
+            q = q.eq("estado", filtro_estado)
+        if filtro_centro != "Todos":
+            q = q.eq("centro", filtro_centro)
+        ots_data = q.order("fecha_inicio").execute().data or []
+    except:
+        ots_data = []
+
+    if not ots_data:
+        st.info("No hay OTs para esta semana. Sube el consolidado Excel arriba.")
+    else:
+        # Métricas rápidas
+        total_ots = len(ots_data)
+        pend  = sum(1 for o in ots_data if o.get("estado") == "pendiente")
+        comp  = sum(1 for o in ots_data if o.get("estado") == "completado")
+        atras = sum(1 for o in ots_data if o.get("estado") == "atrasado")
+
+        m1,m2,m3,m4 = st.columns(4)
+        with m1: st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#90cdf4'>{total_ots}</div><div class='metric-l'>Total OTs</div></div>", unsafe_allow_html=True)
+        with m2: st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#f6ad55'>{pend}</div><div class='metric-l'>Pendientes</div></div>", unsafe_allow_html=True)
+        with m3: st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#48bb78'>{comp}</div><div class='metric-l'>Completadas</div></div>", unsafe_allow_html=True)
+        with m4: st.markdown(f"<div class='metric-card'><div class='metric-n' style='color:#f56565'>{atras}</div><div class='metric-l'>Atrasadas</div></div>", unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Agrupar por día
+        dias = ["Lu","Ma","Mi","Ju","Vi","Sa","Do"]
+        dia_keys = ["horas_lu","horas_ma","horas_mi","horas_ju","horas_vi","horas_sa","horas_do"]
+
+        # Agrupar OTs por su día principal (el que tiene horas)
+        from collections import defaultdict
+        por_dia = defaultdict(list)
+        sin_dia = []
+
+        for ot in ots_data:
+            asignado = False
+            for i, dk in enumerate(dia_keys):
+                if ot.get(dk, 0) and float(ot.get(dk, 0)) > 0:
+                    por_dia[dias[i]].append(ot)
+                    asignado = True
+            if not asignado:
+                sin_dia.append(ot)
+
+        for dia in dias:
+            if por_dia[dia]:
+                st.markdown(f"<div class='dia-header'>📆 {dia}nes" if dia=="Lu" else
+                            f"<div class='dia-header'>📆 {dia}</div>" if dia!="Lu" else "", unsafe_allow_html=True)
+                # Nombre completo del día
+                nombres_dias = {"Lu":"Lunes","Ma":"Martes","Mi":"Miércoles",
+                               "Ju":"Jueves","Vi":"Viernes","Sa":"Sábado","Do":"Domingo"}
+                st.markdown(f"<div class='dia-header'>📆 {nombres_dias[dia]}</div>", unsafe_allow_html=True)
+
+                for ot in por_dia[dia]:
+                    estado = ot.get("estado","pendiente")
+                    badge_cls = {"pendiente":"badge-pend","completado":"badge-comp","atrasado":"badge-atras"}.get(estado,"badge-pend")
+                    borde_color = {"pendiente":"#f6ad55","completado":"#48bb78","atrasado":"#f56565"}.get(estado,"#f6ad55")
+                    horas_dia = ot.get(dia_keys[dias.index(dia)], 0)
+                    obs_html = f"<div class='ot-obs'>⚠️ {ot['obs']}</div>" if ot.get("obs") and ot["obs"] not in ["nan",""] else ""
+
+                    st.markdown(f"""
+                    <div class='ot-card' style='border-left-color:{borde_color};'>
+                        <div style='display:flex;justify-content:space-between;align-items:flex-start;'>
+                            <div style='flex:1;'>
+                                <div class='ot-desc'>{ot.get('descripcion','')}</div>
+                                <div class='ot-meta'>OT: {ot.get('ot','')} &nbsp;·&nbsp; Plan: {ot.get('plan','')} &nbsp;·&nbsp; {ot.get('centro','')} &nbsp;·&nbsp; {horas_dia} hrs</div>
+                                {obs_html}
+                            </div>
+                            <span class='{badge_cls}'>{estado.upper()}</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    # Botón marcar completado
+                    if estado != "completado":
+                        if st.button(f"✅ Marcar completado", key=f"comp_{ot['id']}"):
+                            supabase.table("ots").update({"estado":"completado"}).eq("id", ot["id"]).execute()
+                            st.rerun()
+
+        if sin_dia:
+            st.markdown("<div class='dia-header'>📋 Sin día asignado</div>", unsafe_allow_html=True)
+            for ot in sin_dia:
+                estado = ot.get("estado","pendiente")
+                badge_cls = {"pendiente":"badge-pend","completado":"badge-comp","atrasado":"badge-atras"}.get(estado,"badge-pend")
+                st.markdown(f"""
+                <div class='ot-card'>
+                    <div style='display:flex;justify-content:space-between;'>
+                        <div>
+                            <div class='ot-desc'>{ot.get('descripcion','')}</div>
+                            <div class='ot-meta'>OT: {ot.get('ot','')} · {ot.get('fecha_inicio','')} → {ot.get('fecha_fin','')}</div>
+                        </div>
+                        <span class='{badge_cls}'>{estado.upper()}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════
 # TAB 3 — HISTORIAL
 # ════════════════════════════════════════════════
 with tab3:
@@ -1292,5 +1627,4 @@ if tab5:
                     st.session_state["usuario_activo"]["pin"] = pin_nuevo
                     st.success("✅ PIN actualizado correctamente")
                 except Exception as e:
-                    st.error(f"Error: {e}")
                     st.error(f"Error: {e}")

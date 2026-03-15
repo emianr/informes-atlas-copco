@@ -404,6 +404,11 @@ if not st.session_state["usuario_activo"]:
                 user = verificar_usuario(username_l, pin_l)
                 if user:
                     st.session_state['usuario_activo'] = user
+                    # Registrar último acceso
+                    try:
+                        supabase.table("usuarios").update({"ultimo_acceso": datetime.now().isoformat()}).eq("id", user["id"]).execute()
+                    except:
+                        pass
                     st.rerun()
                 else:
                     st.error('❌ Usuario o PIN incorrecto')
@@ -432,7 +437,7 @@ with col_user:
         st.session_state["wizard_datos"] = {}
         st.rerun()
 
-tabs_list = ["🏭 Equipos", "📋 Generar Informe", "📊 Historial", "📁 Informes"]
+tabs_list = ["🏭 Equipos", "📋 Generar Informe", "📊 Historial", "📁 Informes", "👤 Mi Perfil"]
 if usuario.get("rol") in ["admin", "supervisor"]:
     tabs_list.append("👥 Usuarios")
 _tabs = st.tabs(tabs_list)
@@ -440,7 +445,8 @@ tab1 = _tabs[0]
 tab2 = _tabs[1]
 tab3 = _tabs[2]
 tab4 = _tabs[3]
-tab5 = _tabs[4] if len(_tabs) > 4 else None
+tab_perfil = _tabs[4]
+tab5 = _tabs[5] if len(_tabs) > 5 else None
 
 # ════════════════════════════════════════════════
 # TAB 1 — EQUIPOS
@@ -1038,6 +1044,173 @@ with tab4:
         st.info("No hay informes guardados aun.")
 
 # ════════════════════════════════════════════════
+# ════════════════════════════════════════════════
+# TAB PERFIL — Mi Perfil
+# ════════════════════════════════════════════════
+with tab_perfil:
+
+    u = st.session_state["usuario_activo"]
+    rol_color = {"admin": "#f6ad55", "supervisor": "#90cdf4", "tecnico": "#48bb78"}.get(u.get("rol",""), "#718096")
+    rol_icon  = {"admin": "⚙️", "supervisor": "👁️", "tecnico": "🔧"}.get(u.get("rol",""), "👤")
+
+    # ── CSS modo claro/oscuro ──
+    tema_actual = u.get("tema", "oscuro")
+    if tema_actual == "claro":
+        st.markdown("""
+        <style>
+        .stApp { background: #f7f8fa !important; }
+        .stApp::before { display:none; }
+        .block-container { background: #f7f8fa; }
+        p, label, .stMarkdown { color: #1a202c !important; }
+        </style>
+        """, unsafe_allow_html=True)
+
+    import base64 as _b64
+
+    # ── Header perfil ──
+    foto_html = ""
+    if u.get("foto_perfil"):
+        foto_html = f"<img src='{u['foto_perfil']}' style='width:90px;height:90px;border-radius:50%;object-fit:cover;border:3px solid {rol_color};'>"
+    else:
+        iniciales = "".join([n[0].upper() for n in u.get("nombre","?").split()[:2]])
+        foto_html = f"<div style='width:90px;height:90px;border-radius:50%;background:linear-gradient(135deg,#005B8E,#00A0C6);display:flex;align-items:center;justify-content:center;font-family:Rajdhani,sans-serif;font-size:2rem;font-weight:700;color:white;border:3px solid {rol_color};'>{iniciales}</div>"
+
+    ultimo = u.get("ultimo_acceso","")
+    if ultimo:
+        try:
+            from datetime import datetime as _dt
+            ultimo_fmt = _dt.fromisoformat(ultimo).strftime("%d/%m/%Y %H:%M")
+        except:
+            ultimo_fmt = ultimo[:16]
+    else:
+        ultimo_fmt = "Primera sesión"
+
+    st.markdown(f"""
+    <div style='background:linear-gradient(135deg,#1a1f2e,#0f3460);border-radius:20px;
+         padding:2rem;border:1px solid #2d3748;margin-bottom:1.5rem;
+         display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;'>
+        {foto_html}
+        <div style='flex:1;min-width:200px;'>
+            <div style='font-family:Rajdhani,sans-serif;font-size:1.8rem;
+                 font-weight:700;color:#fff;'>{u.get("nombre","")}</div>
+            <div style='color:#718096;font-size:0.85rem;margin:3px 0;'>{u.get("username","")}</div>
+            <span style='background:rgba(0,160,198,0.15);color:{rol_color};
+                border:1px solid {rol_color}33;border-radius:20px;
+                padding:3px 12px;font-size:0.75rem;font-weight:600;
+                letter-spacing:0.06em;'>{rol_icon} {u.get("rol","").upper()}</span>
+        </div>
+        <div style='text-align:right;min-width:160px;'>
+            <div style='font-size:0.72rem;color:#4a5568;text-transform:uppercase;letter-spacing:0.08em;'>Último acceso</div>
+            <div style='color:#90cdf4;font-size:0.85rem;margin-top:2px;'>{ultimo_fmt}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Estadísticas ──
+    try:
+        res_stats = supabase.table("historial").select("id, tipo, fecha").eq("tecnico_1", u.get("nombre","")).execute()
+        mis_informes = res_stats.data or []
+    except:
+        mis_informes = []
+
+    from datetime import datetime as _dt2
+    mes_actual = _dt2.now().strftime("%Y-%m")
+    este_mes   = [i for i in mis_informes if str(i.get("fecha","")).startswith(mes_actual)]
+    total_inf  = len(mis_informes)
+    mes_inf    = len(este_mes)
+
+    s1, s2, s3 = st.columns(3)
+    with s1:
+        st.markdown(f"""<div class='metric-card'>
+            <div class='metric-n' style='color:#90cdf4;font-size:2rem;'>{total_inf}</div>
+            <div class='metric-l'>Informes Total</div></div>""", unsafe_allow_html=True)
+    with s2:
+        st.markdown(f"""<div class='metric-card'>
+            <div class='metric-n' style='color:#48bb78;font-size:2rem;'>{mes_inf}</div>
+            <div class='metric-l'>Este Mes</div></div>""", unsafe_allow_html=True)
+    with s3:
+        tipos = {}
+        for i in mis_informes:
+            t = i.get("tipo","")
+            tipos[t] = tipos.get(t, 0) + 1
+        top_tipo = max(tipos, key=tipos.get) if tipos else "—"
+        st.markdown(f"""<div class='metric-card'>
+            <div class='metric-n' style='color:#f6ad55;font-size:1.3rem;'>{top_tipo}</div>
+            <div class='metric-l'>Tipo más frecuente</div></div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Editar perfil ──
+    col_edit, col_pin = st.columns(2)
+
+    with col_edit:
+        st.markdown("#### ✏️ Editar Perfil")
+
+        with st.form("form_perfil"):
+            nuevo_tel   = st.text_input("📱 Teléfono", value=u.get("telefono",""), placeholder="+56 9 1234 5678")
+            nueva_esp   = st.text_input("🏷️ Especialidad", value=u.get("especialidad",""), placeholder="Ej: Compresores rotativos")
+            nueva_foto  = st.file_uploader("📸 Foto de perfil", type=["jpg","jpeg","png"], key="foto_perfil_up")
+            nuevo_tema  = st.selectbox("🌙 Tema", ["oscuro", "claro"],
+                                        index=0 if u.get("tema","oscuro")=="oscuro" else 1)
+            guardar_p   = st.form_submit_button("💾 Guardar cambios", use_container_width=True, type="primary")
+
+        if guardar_p:
+            update_data = {
+                "telefono":    nuevo_tel,
+                "especialidad": nueva_esp,
+                "tema":        nuevo_tema,
+            }
+            if nueva_foto:
+                foto_bytes = nueva_foto.read()
+                ext = nueva_foto.name.split(".")[-1].lower()
+                mime = "image/jpeg" if ext in ["jpg","jpeg"] else "image/png"
+                foto_b64 = _b64.b64encode(foto_bytes).decode()
+                update_data["foto_perfil"] = f"data:{mime};base64,{foto_b64}"
+
+            try:
+                supabase.table("usuarios").update(update_data).eq("id", u["id"]).execute()
+                # Actualizar session
+                for k, v in update_data.items():
+                    st.session_state["usuario_activo"][k] = v
+                st.success("✅ Perfil actualizado")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+    with col_pin:
+        st.markdown("#### 🔑 Cambiar PIN")
+
+        with st.form("form_pin_perfil"):
+            pin_act  = st.text_input("PIN actual", type="password", max_chars=4, placeholder="••••")
+            pin_new  = st.text_input("Nuevo PIN", type="password", max_chars=4, placeholder="••••")
+            pin_conf = st.text_input("Confirmar PIN", type="password", max_chars=4, placeholder="••••")
+            cambiar  = st.form_submit_button("🔑 Cambiar PIN", use_container_width=True)
+
+        if cambiar:
+            if pin_act != u.get("pin",""):
+                st.error("PIN actual incorrecto")
+            elif pin_new != pin_conf:
+                st.error("Los PINs no coinciden")
+            elif len(pin_new) < 4:
+                st.error("El PIN debe tener 4 dígitos")
+            else:
+                try:
+                    supabase.table("usuarios").update({"pin": pin_new}).eq("id", u["id"]).execute()
+                    st.session_state["usuario_activo"]["pin"] = pin_new
+                    st.success("✅ PIN actualizado")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+        # Info de contacto si tiene teléfono
+        if u.get("telefono") or u.get("especialidad"):
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("#### 📋 Mi Información")
+            if u.get("telefono"):
+                st.markdown(f"📱 **Teléfono:** {u.get('telefono')}")
+            if u.get("especialidad"):
+                st.markdown(f"🏷️ **Especialidad:** {u.get('especialidad')}")
+
+# ════════════════════════════════════════════════
 # TAB 5 — GESTIÓN DE USUARIOS (admin/supervisor)
 # ════════════════════════════════════════════════
 if tab5:
@@ -1119,4 +1292,5 @@ if tab5:
                     st.session_state["usuario_activo"]["pin"] = pin_nuevo
                     st.success("✅ PIN actualizado correctamente")
                 except Exception as e:
+                    st.error(f"Error: {e}")
                     st.error(f"Error: {e}")

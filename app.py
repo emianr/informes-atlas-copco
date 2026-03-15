@@ -1091,6 +1091,11 @@ with tab_ot:
 
             st.success(f"✅ Excel leído — {len(df)} OTs encontradas")
 
+            # Guardar en session_state para que no se pierda al presionar botón
+            import json
+            st.session_state["ot_df_json"] = df.to_json()
+            st.session_state["ot_col_map"] = col_map
+
             # Parsear tipo de trabajo y equipo desde descripción
             def parsear_descripcion(desc):
                 desc = str(desc)
@@ -1144,23 +1149,27 @@ with tab_ot:
 
             col_imp1, col_imp2 = st.columns(2)
             with col_imp1:
-                sobrescribir = st.checkbox("Sobrescribir OTs existentes de esta semana", value=False)
+                sobrescribir = st.checkbox("Sobrescribir OTs existentes de esta semana", value=False, key="ot_sobrescribir")
             with col_imp2:
-                importar_btn = st.button("📥 IMPORTAR OTs", use_container_width=True, type="primary")
+                importar_btn = st.button("📥 IMPORTAR OTs", use_container_width=True, type="primary", key="ot_importar_btn")
 
             if importar_btn:
+                import pandas as _pd3, json as _json
+                df_import = _pd3.read_json(st.session_state.get("ot_df_json", "{}"))
+                col_map_imp = st.session_state.get("ot_col_map", col_map)
                 importadas = 0
                 errores = 0
                 with st.spinner("Importando OTs..."):
-                    for _, row in df.iterrows():
+                    for _, row in df_import.iterrows():
                         try:
-                            ot_num = str(row.get(col_map.get("ot",""), "")).strip()
+                            ot_num = str(row.get(col_map_imp.get("ot",""), "")).strip()
                             if not ot_num or not ot_num.isdigit():
                                 continue
-                            desc = str(row.get(col_map.get("descripcion",""), ""))
-                            obs  = str(row.get(col_map.get("obs",""), "")) if pd.notna(row.get(col_map.get("obs",""), "")) else ""
-                            fi   = row.get(col_map.get("fecha_inicio",""), None)
-                            ff   = row.get(col_map.get("fecha_fin",""), None)
+                            desc = str(row.get(col_map_imp.get("descripcion",""), ""))
+                            _obs_raw = row.get(col_map_imp.get("obs",""), "")
+                            obs  = str(_obs_raw) if _pd3.notna(_obs_raw) else ""
+                            fi   = row.get(col_map_imp.get("fecha_inicio",""), None)
+                            ff   = row.get(col_map_imp.get("fecha_fin",""), None)
 
                             def safe_date(d):
                                 try:
@@ -1175,27 +1184,27 @@ with tab_ot:
                                     return 0
 
                             registro = {
-                                "centro":       str(row.get(col_map.get("centro",""), "")),
-                                "wbs":          str(row.get(col_map.get("wbs",""), "")),
+                                "centro":       str(row.get(col_map_imp.get("centro",""), "")),
+                                "wbs":          str(row.get(col_map_imp.get("wbs",""), "")),
                                 "descripcion":  desc,
-                                "plan":         str(row.get(col_map.get("plan",""), "")),
+                                "plan":         str(row.get(col_map_imp.get("plan",""), "")),
                                 "ot":           ot_num,
                                 "obs":          obs,
                                 "fecha_inicio": safe_date(fi),
                                 "fecha_fin":    safe_date(ff),
-                                "horas_lu":     safe_num(row.get(col_map.get("lu",""), 0)),
-                                "horas_ma":     safe_num(row.get(col_map.get("ma",""), 0)),
-                                "horas_mi":     safe_num(row.get(col_map.get("mi",""), 0)),
-                                "horas_ju":     safe_num(row.get(col_map.get("ju",""), 0)),
-                                "horas_vi":     safe_num(row.get(col_map.get("vi",""), 0)),
-                                "horas_sa":     safe_num(row.get(col_map.get("sa",""), 0)),
-                                "horas_do":     safe_num(row.get(col_map.get("do",""), 0)),
+                                "horas_lu":     safe_num(row.get(col_map_imp.get("lu",""), 0)),
+                                "horas_ma":     safe_num(row.get(col_map_imp.get("ma",""), 0)),
+                                "horas_mi":     safe_num(row.get(col_map_imp.get("mi",""), 0)),
+                                "horas_ju":     safe_num(row.get(col_map_imp.get("ju",""), 0)),
+                                "horas_vi":     safe_num(row.get(col_map_imp.get("vi",""), 0)),
+                                "horas_sa":     safe_num(row.get(col_map_imp.get("sa",""), 0)),
+                                "horas_do":     safe_num(row.get(col_map_imp.get("do",""), 0)),
                                 "estado":       detectar_estado(obs),
                                 "tipo_trabajo": parsear_descripcion(desc),
                                 "semana":       get_semana(fi),
                             }
 
-                            if sobrescribir:
+                            if st.session_state.get("ot_sobrescribir", False):
                                 supabase.table("ots").upsert(registro, on_conflict="ot").execute()
                             else:
                                 supabase.table("ots").insert(registro).execute()

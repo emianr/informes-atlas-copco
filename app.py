@@ -1361,12 +1361,75 @@ with tab_ot:
                     supabase.table("ots").update({"estado": nuevo_estado}).eq("id", ot["id"]).execute()
                     st.rerun()
 
+        # Detectar qué día de la semana es hoy
+        dia_hoy_idx = hoy.weekday()  # 0=Lunes, 6=Domingo
+        dia_hoy = dias[dia_hoy_idx] if dia_hoy_idx < len(dias) else None
+
+        # ── PRIMERO: OTs de HOY ──
+        if dia_hoy and por_dia[dia_hoy]:
+            comp_hoy  = sum(1 for o in por_dia[dia_hoy] if o.get("estado") == "completado")
+            atras_hoy = sum(1 for o in por_dia[dia_hoy] if o.get("estado") == "atrasado")
+            pend_hoy  = sum(1 for o in por_dia[dia_hoy] if o.get("estado") == "pendiente")
+            icono_hoy = "✅" if comp_hoy == len(por_dia[dia_hoy]) else ("🔴" if atras_hoy > 0 else "🟡")
+
+            st.markdown(f"""
+            <div style='background:linear-gradient(135deg,rgba(0,91,142,0.25),rgba(0,160,198,0.15));
+                 border:1px solid rgba(0,160,198,0.4); border-radius:14px;
+                 padding:0.8rem 1.2rem; margin-bottom:0.5rem;'>
+                <div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;'>
+                    <div>
+                        <div style='font-family:Rajdhani,sans-serif;font-size:1.4rem;font-weight:700;color:#fff;'>
+                            📅 HOY — {dia_names[dia_hoy]} {hoy.strftime("%d/%m/%Y")}
+                        </div>
+                        <div style='font-size:0.8rem;color:#90cdf4;margin-top:2px;'>
+                            {len(por_dia[dia_hoy])} OTs asignadas hoy
+                        </div>
+                    </div>
+                    <div style='display:flex;gap:10px;flex-wrap:wrap;'>
+                        <span style='background:rgba(246,173,85,0.2);color:#f6ad55;border:1px solid rgba(246,173,85,0.4);border-radius:20px;padding:3px 12px;font-size:0.78rem;font-weight:600;'>🟡 {pend_hoy} pendientes</span>
+                        <span style='background:rgba(72,187,120,0.2);color:#48bb78;border:1px solid rgba(72,187,120,0.4);border-radius:20px;padding:3px 12px;font-size:0.78rem;font-weight:600;'>✅ {comp_hoy} completadas</span>
+                        {f'<span style="background:rgba(245,101,101,0.2);color:#f56565;border:1px solid rgba(245,101,101,0.4);border-radius:20px;padding:3px 12px;font-size:0.78rem;font-weight:600;">🔴 {atras_hoy} atrasadas</span>' if atras_hoy > 0 else ''}
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            for ot in por_dia[dia_hoy]:
+                render_ot(ot)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("---")
+            st.markdown("#### 📆 Resto de la semana")
+
+        # ── RESTO DE LA SEMANA ──
         for dia in dias:
             if not por_dia[dia]: continue
-            comp_dia = sum(1 for o in por_dia[dia] if o.get("estado") == "completado")
+            if dia == dia_hoy: continue  # Ya mostrado arriba
+
+            # Determinar si es pasado o futuro
+            idx_dia = dias.index(dia)
+            es_pasado = idx_dia < dia_hoy_idx
+            es_futuro = idx_dia > dia_hoy_idx
+
+            comp_dia  = sum(1 for o in por_dia[dia] if o.get("estado") == "completado")
             atras_dia = sum(1 for o in por_dia[dia] if o.get("estado") == "atrasado")
-            icono = "✅" if comp_dia == len(por_dia[dia]) else ("🔴" if atras_dia > 0 else "🟡")
-            st.markdown(f"<div class='dia-header'>{icono} {dia_names[dia]} — {len(por_dia[dia])} OTs &nbsp; ({comp_dia} completadas)</div>", unsafe_allow_html=True)
+            pend_dia  = sum(1 for o in por_dia[dia] if o.get("estado") == "pendiente")
+            icono = "✅" if comp_dia == len(por_dia[dia]) else ("🔴" if atras_dia > 0 else ("⏳" if es_futuro else "🟡"))
+
+            color_header = "#718096" if es_pasado else ("#90cdf4" if es_futuro else "#e2e8f0")
+            prefijo = "✓ " if es_pasado else ("→ " if es_futuro else "")
+
+            st.markdown(f"""
+            <div class='dia-header' style='color:{color_header};'>
+                {icono} {prefijo}{dia_names[dia]} — {len(por_dia[dia])} OTs
+                <span style='font-size:0.78rem;font-weight:400;margin-left:8px;'>
+                    ({comp_dia} completadas{f", {atras_dia} atrasadas" if atras_dia > 0 else ""})
+                </span>
+                {"<span style='font-size:0.72rem;color:#4a5568;margin-left:8px;'>[pasado]</span>" if es_pasado else ""}
+                {"<span style='font-size:0.72rem;color:#4a9eff;margin-left:8px;'>[próximo]</span>" if es_futuro else ""}
+            </div>
+            """, unsafe_allow_html=True)
+
             for ot in por_dia[dia]:
                 render_ot(ot)
 

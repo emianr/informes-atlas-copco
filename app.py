@@ -1002,6 +1002,126 @@ with tab2:
 # TAB OT SEMANAL — Consolidado OTs
 # ════════════════════════════════════════════════
 with tab_ot:
+    # ── VISTA DE HOY (lo primero que ve el usuario) ──
+    from datetime import datetime as _dthoy, timedelta, date as _datehoy
+    _hoy = _dthoy.now()
+    _semana_hoy = _hoy.strftime("%Y-W%V")
+    _dias       = ["Lu","Ma","Mi","Ju","Vi","Sa","Do"]
+    _dia_keys   = ["horas_lu","horas_ma","horas_mi","horas_ju","horas_vi","horas_sa","horas_do"]
+    _dia_names  = {"Lu":"Lunes","Ma":"Martes","Mi":"Miércoles","Ju":"Jueves","Vi":"Viernes","Sa":"Sábado","Do":"Domingo"}
+    _dia_hoy    = _dias[_hoy.weekday()] if _hoy.weekday() < 7 else "Lu"
+    _dk_hoy     = _dia_keys[_hoy.weekday()]
+
+    try:
+        _ots_hoy = supabase.table("ots").select("*")             .eq("semana", _semana_hoy)             .gt(_dk_hoy, 0)             .order("fecha_inicio").execute().data or []
+    except:
+        _ots_hoy = []
+
+    # Card principal HOY
+    _comp_h  = sum(1 for o in _ots_hoy if o.get("estado") == "completado")
+    _atras_h = sum(1 for o in _ots_hoy if o.get("estado") == "atrasado")
+    _pend_h  = sum(1 for o in _ots_hoy if o.get("estado") == "pendiente")
+    _proc_h  = sum(1 for o in _ots_hoy if o.get("estado") == "en_proceso")
+    _total_h = len(_ots_hoy)
+
+    if _total_h > 0:
+        _pct_h = int((_comp_h / _total_h) * 100) if _total_h > 0 else 0
+        st.markdown(f"""
+        <div style='background:linear-gradient(135deg,rgba(0,91,142,0.3),rgba(0,160,198,0.2));
+             border:1.5px solid rgba(0,160,198,0.5);border-radius:16px;
+             padding:1.2rem 1.5rem;margin-bottom:1rem;'>
+            <div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;'>
+                <div>
+                    <div style='font-size:0.72rem;color:#90cdf4;text-transform:uppercase;letter-spacing:0.1em;'>HOY</div>
+                    <div style='font-family:Rajdhani,sans-serif;font-size:1.8rem;font-weight:700;color:#fff;line-height:1.1;'>
+                        {_dia_names[_dia_hoy]} {_hoy.strftime("%d/%m/%Y")}
+                    </div>
+                    <div style='font-size:0.82rem;color:#718096;margin-top:2px;'>
+                        {_total_h} OTs programadas para hoy
+                    </div>
+                </div>
+                <div style='display:flex;gap:8px;flex-wrap:wrap;'>
+                    <span style='background:rgba(246,173,85,0.2);color:#f6ad55;border:1px solid rgba(246,173,85,0.4);border-radius:20px;padding:4px 14px;font-size:0.8rem;font-weight:600;'>🟡 {_pend_h} pendientes</span>
+                    <span style='background:rgba(144,205,244,0.2);color:#90cdf4;border:1px solid rgba(144,205,244,0.4);border-radius:20px;padding:4px 14px;font-size:0.8rem;font-weight:600;'>🔵 {_proc_h} en proceso</span>
+                    <span style='background:rgba(72,187,120,0.2);color:#48bb78;border:1px solid rgba(72,187,120,0.4);border-radius:20px;padding:4px 14px;font-size:0.8rem;font-weight:600;'>✅ {_comp_h} completadas</span>
+                    {"<span style='background:rgba(245,101,101,0.2);color:#f56565;border:1px solid rgba(245,101,101,0.4);border-radius:20px;padding:4px 14px;font-size:0.8rem;font-weight:600;'>🔴 " + str(_atras_h) + " atrasadas</span>" if _atras_h > 0 else ""}
+                </div>
+            </div>
+            <div style='margin-top:1rem;'>
+                <div style='display:flex;justify-content:space-between;font-size:0.72rem;color:#718096;margin-bottom:4px;'>
+                    <span>Progreso del día</span><span>{_pct_h}%</span>
+                </div>
+                <div style='background:rgba(255,255,255,0.08);border-radius:20px;height:6px;overflow:hidden;'>
+                    <div style='background:linear-gradient(90deg,#48bb78,#38a169);height:100%;
+                         width:{_pct_h}%;border-radius:20px;transition:width 0.5s;'></div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Lista OTs de hoy
+        _estados_opts  = ["pendiente","en_proceso","completado","atrasado"]
+        _estado_labels = {"pendiente":"🟡 Pendiente","en_proceso":"🔵 En proceso",
+                          "completado":"🟢 Completado","atrasado":"🔴 Atrasado"}
+        _borde_color   = {"pendiente":"#f6ad55","completado":"#48bb78",
+                          "atrasado":"#f56565","en_proceso":"#90cdf4"}
+
+        for _ot in _ots_hoy:
+            _est   = _ot.get("estado","pendiente")
+            _borde = _borde_color.get(_est,"#f6ad55")
+            _tipo  = _ot.get("tipo_trabajo","")
+            _tipo_cl = "tipo-mant" if "antenci" in _tipo else ("tipo-mec" if "ecánico" in _tipo else "tipo-insp")
+            _obs_h = f"<div class='ot-obs'>⚠️ {_ot['obs']}</div>" if _ot.get("obs","") not in ["","nan","None"] else ""
+            _hrs   = float(_ot.get(_dk_hoy, 0) or 0)
+
+            _ca, _cb = st.columns([5, 2])
+            with _ca:
+                st.markdown(f"""
+                <div class='ot-card' style='border-left:4px solid {_borde};'>
+                    <div style='display:flex;justify-content:space-between;align-items:flex-start;'>
+                        <div style='flex:1;'>
+                            <div style='margin-bottom:3px;'><span class='{_tipo_cl}'>{_tipo}</span></div>
+                            <div class='ot-desc'>{_ot.get("descripcion","")}</div>
+                            <div class='ot-meta'>
+                                OT: <b>{_ot.get("ot","")}</b> &nbsp;·&nbsp;
+                                Plan: {_ot.get("plan","")} &nbsp;·&nbsp;
+                                {_ot.get("centro","")} &nbsp;·&nbsp;
+                                ⏱️ {_hrs} hrs
+                            </div>
+                            {_obs_h}
+                        </div>
+                        <span class='badge-{_est}'>{_est.replace("_"," ").upper()}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            with _cb:
+                _nuevo_est = st.selectbox(
+                    "Estado",
+                    _estados_opts,
+                    index=_estados_opts.index(_est) if _est in _estados_opts else 0,
+                    format_func=lambda x: _estado_labels[x],
+                    key=f"hoy_est_{_ot['id']}",
+                    label_visibility="collapsed"
+                )
+                if _nuevo_est != _est:
+                    supabase.table("ots").update({"estado": _nuevo_est}).eq("id", _ot["id"]).execute()
+                    st.rerun()
+
+    elif _total_h == 0:
+        st.markdown(f"""
+        <div style='background:#1a1f2e;border:1px solid #2d3748;border-radius:16px;
+             padding:1.5rem;text-align:center;margin-bottom:1rem;'>
+            <div style='font-size:1.5rem;margin-bottom:0.5rem;'>📅</div>
+            <div style='font-family:Rajdhani,sans-serif;font-size:1.3rem;color:#e2e8f0;font-weight:600;'>
+                {_dia_names[_dia_hoy]} {_hoy.strftime("%d/%m/%Y")}
+            </div>
+            <div style='color:#718096;font-size:0.85rem;margin-top:4px;'>
+                No hay OTs programadas para hoy en la semana {_semana_hoy}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.divider()
     st.markdown("### 📅 Consolidado OT Semanal")
 
     st.markdown("""

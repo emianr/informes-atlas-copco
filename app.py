@@ -1862,3 +1862,4 @@ if tab5:
                     st.success("✅ PIN actualizado correctamente")
                 except Exception as e:
                     st.error(f"Error: {e}")
+            

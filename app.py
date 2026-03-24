@@ -1207,14 +1207,30 @@ with tab_ot:
                 elif cl in ["sa","sab","sáb"]:      col_map["sa"] = col
                 elif cl in ["do","dom"]:            col_map["do"] = col
 
+            # Filtrar filas válidas — OT debe ser numérico
             ot_col = col_map.get("ot","")
             if ot_col:
                 df_raw = df_raw[df_raw[ot_col].notna()]
-                df_raw = df_raw[df_raw[ot_col].astype(str).str.strip().str.isdigit()]
+                df_raw = df_raw[df_raw[ot_col].astype(str).str.strip().str.match(r"^\d{5,}$")]
 
-            semana_det = semana_actual
+            # Convertir fechas (formato DD-MM-YYYY)
             fi_col = col_map.get("fecha_inicio","")
+            ff_col = col_map.get("fecha_fin","")
             if fi_col:
+                df_raw[fi_col] = pd.to_datetime(df_raw[fi_col], dayfirst=True, errors="coerce")
+            if ff_col:
+                df_raw[ff_col] = pd.to_datetime(df_raw[ff_col], dayfirst=True, errors="coerce")
+
+            # Convertir horas — reemplazar coma por punto
+            for _hcol in ["lu","ma","mi","ju","vi","sa","do"]:
+                _c = col_map.get(_hcol,"")
+                if _c and _c in df_raw.columns:
+                    df_raw[_c] = df_raw[_c].astype(str).str.replace(",",".").str.strip()
+                    df_raw[_c] = pd.to_numeric(df_raw[_c], errors="coerce").fillna(0)
+
+            # Detectar semana desde primera fecha válida
+            semana_det = semana_actual
+            if fi_col and fi_col in df_raw.columns:
                 for _, r in df_raw.head(5).iterrows():
                     try:
                         v = r.get(fi_col)
@@ -1259,11 +1275,16 @@ with tab_ot:
                 errores    = 0
 
                 def safe_date(d):
-                    try: return pd.to_datetime(d).strftime("%Y-%m-%d") if pd.notna(d) else None
+                    try:
+                        if pd.notna(d):
+                            return pd.to_datetime(d, dayfirst=True).strftime("%Y-%m-%d")
+                        return None
                     except: return None
 
                 def safe_num(v):
-                    try: return float(v) if pd.notna(v) else 0.0
+                    try:
+                        if pd.isna(v): return 0.0
+                        return float(str(v).replace(",",".").strip())
                     except: return 0.0
 
                 def parsear_tipo(desc):

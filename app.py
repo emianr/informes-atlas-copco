@@ -1051,6 +1051,20 @@ with tab_ot:
         if "insp" in d: return "INSPECCIÓN", "tipo-insp"
         return "TRABAJO", "tipo-insp"
 
+    def extraer_equipo(desc):
+        import re as _re
+        d = str(desc)
+        tag = _re.search(r"(\d{3}[-]?[A-Z]{2,3}[-]?\d{2,4}[A-Z]?\d*)", d)
+        if tag: return tag.group(1)
+        modelo = _re.search(r"(G[A-Z]?\d{2,3}[+]?|ZE\d|ZS\d+|BD\d+|CD\d+|GR\d+|LF\d+)", d, _re.IGNORECASE)
+        if modelo: return modelo.group(1).upper()
+        clean = _re.sub(r"^(PS|PM)\s+\d+[SM]\s+Elm\s+(Insp|Mant|Mec)\s+", "", d, flags=_re.IGNORECASE)
+        clean = _re.sub(r"(Compres|Compr|Secad|Soplad)\w*\s*", "", clean, flags=_re.IGNORECASE)
+        clean = _re.sub(r"(Vlv|Valv|Acum|Elm)\w*\s*", "", clean, flags=_re.IGNORECASE)
+        clean = _re.sub(r"\d+[Hh]rs?", "", clean)
+        palabras = [p for p in clean.strip().split() if len(p) > 2 and not p.isdigit()]
+        return " ".join(palabras[:3]) if palabras else ""
+
     def detectar_area(desc):
         d = str(desc).lower()
         areas = {"hidro":"Hidrometalurgia","sulfuro":"Sulfuro","oxe":"OXE",
@@ -1134,12 +1148,14 @@ with tab_ot:
 
             _ca, _cb = st.columns([5,2])
             with _ca:
+                _equipo_h = extraer_equipo(_ot.get("descripcion",""))
                 st.markdown(f"""
                 <div class='ot-card' style='border-left:4px solid {_borde};'>
                     <div style='display:flex;justify-content:space-between;align-items:flex-start;'>
                         <div style='flex:1;'>
-                            <div style='margin-bottom:4px;display:flex;gap:8px;align-items:center;'>
+                            <div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:5px;'>
                                 <span class='{_tipo_cl}'>{_tipo_t}</span>
+                                {"<span style='background:rgba(0,160,198,0.15);color:#90cdf4;border:1px solid rgba(0,160,198,0.3);border-radius:6px;padding:1px 8px;font-size:0.78rem;font-weight:600;'>🔧 "+_equipo_h+"</span>" if _equipo_h else ""}
                                 {"<span style='font-size:0.72rem;color:#718096;'>"+_area+"</span>" if _area else ""}
                             </div>
                             <div class='ot-desc'>{_ot.get("descripcion","")}</div>
@@ -1477,12 +1493,14 @@ with tab_ot:
 
                 _xa, _xb = st.columns([5,2])
                 with _xa:
+                    _equipo2 = extraer_equipo(_ot2.get("descripcion",""))
                     st.markdown(f"""
                     <div class='ot-card' style='border-left:4px solid {_borde2};'>
                         <div style='display:flex;justify-content:space-between;align-items:flex-start;'>
                             <div style='flex:1;'>
-                                <div style='display:flex;gap:8px;align-items:center;margin-bottom:4px;'>
+                                <div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:5px;'>
                                     <span class='{_tcl2}'>{_tipo2}</span>
+                                    {"<span style='background:rgba(0,160,198,0.15);color:#90cdf4;border:1px solid rgba(0,160,198,0.3);border-radius:6px;padding:1px 8px;font-size:0.78rem;font-weight:600;'>🔧 "+_equipo2+"</span>" if _equipo2 else ""}
                                     {"<span style='font-size:0.72rem;color:#718096;'>"+_area2+"</span>" if _area2 else ""}
                                 </div>
                                 <div class='ot-desc'>{_ot2.get("descripcion","")}</div>

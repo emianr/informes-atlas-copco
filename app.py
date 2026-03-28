@@ -530,29 +530,89 @@ with tab1:
                 st.markdown("### 🔩 Componentes / Repuestos")
                 comps = cargar_componentes(sel_tag)
                 if comps:
-                    for c in comps:
-                        cc1, cc2, cc3 = st.columns([2, 3, 1])
-                        with cc1: st.markdown(f"<div style='font-size:0.75rem;color:#718096;text-transform:uppercase'>{c.get('tipo','')}</div>", unsafe_allow_html=True)
-                        with cc2: st.markdown(f"<div style='font-family:Rajdhani,sans-serif;font-size:1rem;font-weight:600;color:#90cdf4'>{c.get('numero_parte','—')}</div><div style='font-size:0.75rem;color:#718096'>{c.get('descripcion','')}</div>", unsafe_allow_html=True)
-                        with cc3:
-                            if st.button("🗑", key=f"del_c_{c['id']}"):
-                                eliminar_componente(c["id"])
-                                st.rerun()
+                    # Categorías únicas
+                    cats = sorted(set(c.get("tipo","Otro") for c in comps))
+                    tipo_icons = {
+                        "Filtro de aire":     "💨",
+                        "Filtro de aceite":   "🛢️",
+                        "Filtro separador":   "⚙️",
+                        "Aceite (referencia)":"🫙",
+                        "Kit de mantenimiento":"🧰",
+                        "Otro":               "🔧",
+                    }
+
+                    # Búsqueda
+                    busq_comp = st.text_input("🔍 Buscar componente o Nº parte",
+                        key=f"busq_comp_{sel_tag}", placeholder="Ej: filtro, 1613...")
+
+                    # Filtro por categoría
+                    cat_sel = st.radio("Categoría", ["Todos"] + cats,
+                        key=f"cat_{sel_tag}", horizontal=True)
+
+                    # Filtrar
+                    comps_filtrados = comps
+                    if cat_sel != "Todos":
+                        comps_filtrados = [c for c in comps_filtrados if c.get("tipo") == cat_sel]
+                    if busq_comp:
+                        bq = busq_comp.lower()
+                        comps_filtrados = [c for c in comps_filtrados if
+                            bq in str(c.get("numero_parte","")).lower() or
+                            bq in str(c.get("descripcion","")).lower() or
+                            bq in str(c.get("tipo","")).lower()]
+
+                    st.caption(f"Mostrando {len(comps_filtrados)} de {len(comps)} componentes")
+
+                    # Agrupar por categoría
+                    from collections import defaultdict as _dd
+                    por_cat = _dd(list)
+                    for c in comps_filtrados:
+                        por_cat[c.get("tipo","Otro")].append(c)
+
+                    for cat, items in por_cat.items():
+                        icon = tipo_icons.get(cat, "🔧")
+                        st.markdown(f"""
+                        <div style='font-size:0.72rem;color:#718096;text-transform:uppercase;
+                             letter-spacing:0.08em;margin:0.8rem 0 0.3rem 0;
+                             border-bottom:1px solid #2d3748;padding-bottom:3px;'>
+                            {icon} {cat} ({len(items)})
+                        </div>
+                        """, unsafe_allow_html=True)
+                        for c in items:
+                            cc1, cc2, cc3 = st.columns([5, 1, 1])
+                            with cc1:
+                                st.markdown(f"""
+                                <div style='background:#1a1f2e;border-radius:8px;padding:0.6rem 0.8rem;
+                                     border:1px solid #2d3748;margin-bottom:3px;'>
+                                    <div style='font-family:Rajdhani,sans-serif;font-size:0.95rem;
+                                         font-weight:600;color:#90cdf4;'>{c.get('numero_parte','—')}</div>
+                                    <div style='font-size:0.78rem;color:#718096;margin-top:2px;'>{c.get('descripcion','')}</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            with cc2:
+                                st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
+                                if st.button("📋", key=f"copy_{c['id']}", help="Copiar Nº parte"):
+                                    st.toast(f"Nº parte: {c.get('numero_parte','')}")
+                            with cc3:
+                                st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
+                                if st.button("🗑", key=f"del_c_{c['id']}", help="Eliminar"):
+                                    eliminar_componente(c["id"])
+                                    st.rerun()
                 else:
-                    st.caption("Sin componentes registrados.")
+                    st.info("Sin componentes registrados para este equipo.")
+
                 st.markdown("<br>", unsafe_allow_html=True)
                 with st.expander("➕ Agregar componente"):
                     nc1, nc2 = st.columns(2)
                     with nc1: n_tipo  = st.selectbox("Tipo", ["Filtro de aire","Filtro de aceite","Filtro separador","Aceite (referencia)","Kit de mantenimiento","Otro"], key=f"nt_{sel_tag}")
-                    with nc2: n_parte = st.text_input("Numero de parte", key=f"np_{sel_tag}")
-                    n_desc = st.text_input("Descripcion (opcional)", key=f"nd_{sel_tag}")
-                    if st.button("Guardar componente", key=f"gc_{sel_tag}"):
+                    with nc2: n_parte = st.text_input("Número de parte", key=f"np_{sel_tag}")
+                    n_desc = st.text_input("Descripción (opcional)", key=f"nd_{sel_tag}")
+                    if st.button("💾 Guardar componente", key=f"gc_{sel_tag}", use_container_width=True, type="primary"):
                         if n_parte:
                             guardar_componente({"equipo_tag": sel_tag, "tipo": n_tipo, "numero_parte": n_parte, "descripcion": n_desc})
-                            st.success("Componente guardado.")
+                            st.success("✅ Componente guardado.")
                             st.rerun()
                         else:
-                            st.warning("Ingresa el numero de parte.")
+                            st.warning("Ingresa el número de parte.")
 
             with col_edit:
                 st.markdown("### ✏️ Editar Datos")
@@ -1178,6 +1238,13 @@ with tab_ot:
                 if _nuevo != _est:
                     supabase.table("ots").update({"estado":_nuevo}).eq("id",_ot["id"]).execute()
                     st.rerun()
+                # Botón ver ficha equipo
+                _eq_tag_hoy = _equipo_h if _equipo_h else ""
+                if _eq_tag_hoy and st.button(f"📋 Ver ficha", key=f"ficha_hoy_{_ot['id']}", use_container_width=True):
+                    st.session_state["equipo_sel"]    = _eq_tag_hoy
+                    st.session_state["pagina_equipo"] = "ficha"
+                    st.session_state["nav_tab"]       = 0  # ir a tab Equipos
+                    st.rerun()
     else:
         st.markdown(f"""
         <div style='background:#1a1f2e;border:1px solid #2d3748;border-radius:16px;
@@ -1518,6 +1585,12 @@ with tab_ot:
                         key=f"sem_{_ot2['id']}", label_visibility="collapsed")
                     if _nvo != _est2:
                         supabase.table("ots").update({"estado":_nvo}).eq("id",_ot2["id"]).execute()
+                        st.rerun()
+                    _eq_tag_sem = _equipo2 if _equipo2 else ""
+                    if _eq_tag_sem and st.button(f"📋 Ver ficha", key=f"ficha_sem_{_ot2['id']}", use_container_width=True):
+                        st.session_state["equipo_sel"]    = _eq_tag_sem
+                        st.session_state["pagina_equipo"] = "ficha"
+                        st.session_state["nav_tab"]       = 0
                         st.rerun()
 
 # TAB 3 — HISTORIAL
